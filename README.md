@@ -26,44 +26,6 @@ It features a custom zero-allocation C inference engine, Flash Memory-Mapping (X
 
 ---
 
-## 📁 Directory Structure
-
-```text
-esp32-llm/
-├── data/                         # Data acquisition & corpus preparation
-│   ├── prepare_expanded_data.py  # Gutenberg poetry downloader & cleaner
-│   └── raw/                      # Downloaded source text files & combined corpus
-├── docs/                         # End-to-end architecture & workflow docs
-│   ├── architecture_and_workflow.md    # Complete technical documentation
-│   └── architecture_and_workflow.html  # Interactive visual HTML walkthrough
-├── esp32/                        # ESP32 C Engine & PlatformIO firmware
-│   ├── main/
-│   │   ├── bpe_vocab.h           # BPE decode strings & merge rules for C
-│   │   ├── model_runner.c        # High-level runner & sampling loop
-│   │   ├── model_runner.h        # Runner headers
-│   │   ├── esp32_llm_engine.c     # Zero-allocation Transformer forward pass
-│   │   └── esp32_llm_engine.h     # KV-cache & tensor structures
-│   ├── flash_all.py              # Automated 4-partition flashing script
-│   ├── monitor.py                # Bidirectional interactive serial console
-│   └── partitions.csv            # SPI Flash partition layout table
-├── experiments/                  # Training summaries & model checkpoints
-│   └── results/                  # Saved .pth models & summary JSON
-├── export/                       # Weight packing & diagnostic tools
-│   ├── export_fp32.py            # FP32 binary serializer
-│   └── inspect_weights.py        # Diagnostic binary offset parser
-├── training/                     # PyTorch training & tokenization codebase
-│   ├── bpe_tokenizer.py          # BPE trainer & C export module
-│   ├── model.py                  # PyTorch ESP32LLM Transformer definition
-│   ├── train_v2_bpe.py           # Full GPU training pipeline
-│   └── verify_gpu.py             # GPU vs hardware verification script
-├── platformio.ini                # PlatformIO build configuration
-├── project_progress.md           # Empirical progress log & research findings
-├── requirements.txt              # Python dependencies
-└── README.md                     # Project documentation
-```
-
----
-
 ## 🛠️ Step-by-Step E2E Reproduction Guide
 
 Follow these steps to train, export, and flash ESP32LLM onto your physical ESP32 board from scratch.
