@@ -1,4 +1,4 @@
-# TinyPoet ESP32: Zero-Allocation On-Device LLM Engine
+# ESP32LLM ESP32: Zero-Allocation On-Device LLM Engine
 
 [![ESP32](https://img.shields.io/badge/Hardware-ESP32--D0WD--V3-orange.svg)](https://www.espressif.com/)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -6,7 +6,7 @@
 [![Framework](https://img.shields.io/badge/Framework-PlatformIO%20%2F%20ESP--IDF-green.svg)](https://platformio.org/)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-**TinyPoet** is a complete, production-grade implementation of an on-device Transformer Language Model running on the **ESP32-D0WD-V3 (ESP32-WROOM-32)** microcontroller without requiring external PSRAM.
+**ESP32LLM** is a complete, production-grade implementation of an on-device Transformer Language Model running on the **ESP32-D0WD-V3 (ESP32-WROOM-32)** microcontroller without requiring external PSRAM.
 
 It features a custom zero-allocation C inference engine, Flash Memory-Mapping (XIP), Byte Pair Encoding (BPE) subword tokenization, and hardware-seeded Temperature + Top-K sampling.
 
@@ -41,8 +41,8 @@ esp32-llm/
 │   │   ├── bpe_vocab.h           # BPE decode strings & merge rules for C
 │   │   ├── model_runner.c        # High-level runner & sampling loop
 │   │   ├── model_runner.h        # Runner headers
-│   │   ├── tinypoet_engine.c     # Zero-allocation Transformer forward pass
-│   │   └── tinypoet_engine.h     # KV-cache & tensor structures
+│   │   ├── esp32_llm_engine.c     # Zero-allocation Transformer forward pass
+│   │   └── esp32_llm_engine.h     # KV-cache & tensor structures
 │   ├── flash_all.py              # Automated 4-partition flashing script
 │   ├── monitor.py                # Bidirectional interactive serial console
 │   └── partitions.csv            # SPI Flash partition layout table
@@ -53,7 +53,7 @@ esp32-llm/
 │   └── inspect_weights.py        # Diagnostic binary offset parser
 ├── training/                     # PyTorch training & tokenization codebase
 │   ├── bpe_tokenizer.py          # BPE trainer & C export module
-│   ├── model.py                  # PyTorch TinyPoet Transformer definition
+│   ├── model.py                  # PyTorch ESP32LLM Transformer definition
 │   ├── train_v2_bpe.py           # Full GPU training pipeline
 │   └── verify_gpu.py             # GPU vs hardware verification script
 ├── platformio.ini                # PlatformIO build configuration
@@ -66,7 +66,7 @@ esp32-llm/
 
 ## 🛠️ Step-by-Step E2E Reproduction Guide
 
-Follow these steps to train, export, and flash TinyPoet onto your physical ESP32 board from scratch.
+Follow these steps to train, export, and flash ESP32LLM onto your physical ESP32 board from scratch.
 
 ### Step 1: Environment Setup
 
@@ -158,7 +158,7 @@ Type a prompt (e.g. `love is` or `in the night`) and press **Enter** to watch th
 
 ## 🧮 Core SRAM Budget Mathematics
 
-To guarantee that TinyPoet never triggers an Out-Of-Memory (OOM) heap panic on internal SRAM:
+To guarantee that ESP32LLM never triggers an Out-Of-Memory (OOM) heap panic on internal SRAM:
 
 $$\text{KV Cache} = 2 \times N_{layer} \times N_{head} \times N_{ctx} \times d_{head} \times 4\text{ bytes}$$
 $$\text{For } 2\text{L} / 4\text{H} / 80\text{D } (d_{head}=20), N_{ctx}=64: \quad 2 \times 2 \times 4 \times 64 \times 20 \times 4 = 81.92\text{ KB}$$

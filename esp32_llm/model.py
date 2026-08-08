@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
-class TinyPoetConfig:
+class ESP32LLMConfig:
     def __init__(
         self,
         vocab_size: int = 44,
@@ -23,7 +23,7 @@ class TinyPoetConfig:
         self.bias = bias
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config: TinyPoetConfig):
+    def __init__(self, config: ESP32LLMConfig):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads
@@ -62,7 +62,7 @@ class CausalSelfAttention(nn.Module):
         return y
 
 class MLP(nn.Module):
-    def __init__(self, config: TinyPoetConfig):
+    def __init__(self, config: ESP32LLMConfig):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu = nn.GELU()
@@ -75,7 +75,7 @@ class MLP(nn.Module):
         return x
 
 class Block(nn.Module):
-    def __init__(self, config: TinyPoetConfig):
+    def __init__(self, config: ESP32LLMConfig):
         super().__init__()
         self.ln_1 = nn.LayerNorm(config.n_embd, elementwise_affine=config.bias)
         self.attn = CausalSelfAttention(config)
@@ -87,8 +87,8 @@ class Block(nn.Module):
         x = x + self.mlp(self.ln_2(x))
         return x
 
-class TinyPoet(nn.Module):
-    def __init__(self, config: TinyPoetConfig):
+class ESP32LLM(nn.Module):
+    def __init__(self, config: ESP32LLMConfig):
         super().__init__()
         self.config = config
 

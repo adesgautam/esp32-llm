@@ -9,12 +9,12 @@
 #include "esp_spi_flash.h"
 #include "esp_timer.h"
 #include "model_runner.h"
-#include "tinypoet_engine.h"
+#include "esp32_llm_engine.h"
 #include "bpe_vocab.h"
 
 static const char *TAG = "MODEL_RUNNER";
 
-static TinyPoetEngine s_engine;
+static ESP32LLMEngine s_engine;
 static const void *s_mapped_model_ptr = NULL;
 static spi_flash_mmap_handle_t s_mmap_handle;
 
@@ -45,7 +45,7 @@ esp_err_t init_model_runner(void)
     
     ESP_LOGI(TAG, "Model header: magic=0x%08x version=%d", (unsigned)magic, (int)version);
     
-    TinyPoetConfigC config = {
+    ESP32LLMConfigC config = {
         .n_layer = hdr[2],
         .n_head = hdr[3],
         .n_embd = hdr[4],
@@ -58,8 +58,8 @@ esp_err_t init_model_runner(void)
              (int)config.n_layer, (int)config.n_head, (int)config.n_embd,
              (int)config.block_size, (int)config.vocab_size);
 
-    tinypoet_init(&s_engine, &config, (const uint8_t *)s_mapped_model_ptr);
-    ESP_LOGI(TAG, "TinyPoet BPE engine initialized.");
+    esp32_llm_init(&s_engine, &config, (const uint8_t *)s_mapped_model_ptr);
+    ESP_LOGI(TAG, "ESP32LLM BPE engine initialized.");
     return ESP_OK;
 }
 
@@ -186,7 +186,7 @@ void run_poetry_generation(const char *prompt, int max_tokens)
     int prompt_len = bpe_encode_prompt(prompt, prompt_tokens, block_size);
     
     ESP_LOGI(TAG, "BPE prompt: '%s' -> %d tokens", prompt, prompt_len);
-    tinypoet_reset_kv_cache(&s_engine);
+    esp32_llm_reset_kv_cache(&s_engine);
 
     float logits[MAX_VOCAB_SIZE];
 
@@ -204,7 +204,7 @@ void run_poetry_generation(const char *prompt, int max_tokens)
             }
         }
 
-        tinypoet_forward_step(&s_engine, token_id, step % block_size, logits);
+        esp32_llm_forward_step(&s_engine, token_id, step % block_size, logits);
         
         vTaskDelay(pdMS_TO_TICKS(5));
     }

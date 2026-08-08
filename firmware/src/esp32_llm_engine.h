@@ -30,10 +30,10 @@ typedef struct {
     uint32_t block_size;
     uint32_t vocab_size;
     WeightFormat format;
-} TinyPoetConfigC;
+} ESP32LLMConfigC;
 
 typedef struct {
-    TinyPoetConfigC config;
+    ESP32LLMConfigC config;
     
     // KV Cache: shape [n_layer, 2 (k,v), block_size, n_embd] = 81.92 KB
     float kv_cache[MAX_LAYERS][2][MAX_BLOCK_SIZE][MAX_EMBD];
@@ -49,12 +49,12 @@ typedef struct {
     float logits[MAX_VOCAB_SIZE];
     
     const uint8_t *model_weights_ptr; // Pointer to Flash memory-mapped weights
-} TinyPoetEngine;
+} ESP32LLMEngine;
 
 // Engine API Functions
-void tinypoet_init(TinyPoetEngine *engine, const TinyPoetConfigC *config, const uint8_t *weights_ptr);
-void tinypoet_reset_kv_cache(TinyPoetEngine *engine);
-void tinypoet_forward_step(TinyPoetEngine *engine, int token_id, int pos, float *out_logits);
+void esp32_llm_init(ESP32LLMEngine *engine, const ESP32LLMConfigC *config, const uint8_t *weights_ptr);
+void esp32_llm_reset_kv_cache(ESP32LLMEngine *engine);
+void esp32_llm_forward_step(ESP32LLMEngine *engine, int token_id, int pos, float *out_logits);
 
 // Packing / Unpacking Helper Functions
 void unpack_2bit_block(const uint8_t *packed, int8_t *out_weights, int num_weights);

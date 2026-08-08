@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="tinypoet",
+    name="esp32_llm",
     version="2.0.0",
-    description="TinyPoet: Zero-Allocation On-Device LLM for ESP32",
-    author="TinyPoet Contributors",
+    description="ESP32LLM: Zero-Allocation On-Device LLM for ESP32",
+    author="ESP32LLM Contributors",
     packages=find_packages(),
     install_requires=[
         "torch>=2.0.0",

@@ -1,8 +1,8 @@
-# TinyPoet ESP32 On-Device LLM: End-to-End Architecture & Workflow
+# ESP32LLM ESP32 On-Device LLM: End-to-End Architecture & Workflow
 
 ## Executive Summary & Hardware Constraints
 
-**TinyPoet** is a zero-allocation, memory-mapped C inference engine and transformer language model designed to run completely on-device on the **ESP32-D0WD-V3 (ESP32-WROOM-32)** microcontroller without external PSRAM.
+**ESP32LLM** is a zero-allocation, memory-mapped C inference engine and transformer language model designed to run completely on-device on the **ESP32-D0WD-V3 (ESP32-WROOM-32)** microcontroller without external PSRAM.
 
 ### Core Hardware Specifications
 - **MCU:** ESP32-D0WD-V3 (Dual-core Xtensa LX6 @ 240 MHz)
@@ -61,7 +61,7 @@ Character-level models require many steps to predict single words and suffer fro
 ---
 
 ### Step 4: Model Architecture & Retraining Pipeline
-We built and trained the **TinyPoet v2** architecture (`training/train_v2_bpe.py`):
+We built and trained the **ESP32LLM v2** architecture (`training/train_v2_bpe.py`):
 
 - **Parameters:** 181,440 parameters (2 Layers, 4 Attention Heads, 80 Embedding Dim, Context Window 64).
 - **Training Setup:** 150 Epochs on NVIDIA GPU over 5.5M BPE tokens (~193,500 steps).
@@ -84,7 +84,7 @@ The PyTorch `state_dict` is exported into a unified packed binary (`esp32/main/m
 ---
 
 ### Step 6: ESP32 Zero-Allocation C Engine & Hardware Sampling
-The ESP32 runtime (`esp32/main/tinypoet_engine.c` and `model_runner.c`) executes inference with zero heap allocations:
+The ESP32 runtime (`esp32/main/esp32_llm_engine.c` and `model_runner.c`) executes inference with zero heap allocations:
 
 1. **Flash Mapping:** `esp_partition_mmap` maps `model_weights.bin` directly into Xtensa CPU address space.
 2. **On-Device BPE Encoding:** Prompts entered by the user via the interactive serial console are encoded directly on the ESP32 using the embedded BPE merge rules (`bpe_merges`).

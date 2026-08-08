@@ -21,7 +21,7 @@ def generate_benchmark_reports():
 
     # 1. Host Benchmarks Summary
     host_benchmarks = {
-        "title": "TinyPoet Host PyTorch Training & Model Scaling Benchmarks",
+        "title": "ESP32LLM Host PyTorch Training & Model Scaling Benchmarks",
         "experiments": registry_data,
         "ternary_packing_compression": {
             "fp32_bytes_per_weight": 4.0,

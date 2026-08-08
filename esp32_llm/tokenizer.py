@@ -1,5 +1,5 @@
 """
-BPE (Byte Pair Encoding) Tokenizer for TinyPoet.
+BPE (Byte Pair Encoding) Tokenizer for ESP32LLM.
 Trained on the poetry corpus, designed to run both in Python (training/inference) 
 and export a decode table for the ESP32 C runtime.
 

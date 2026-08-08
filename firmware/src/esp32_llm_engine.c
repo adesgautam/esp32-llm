@@ -1,4 +1,4 @@
-#include "tinypoet_engine.h"
+#include "esp32_llm_engine.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -119,18 +119,18 @@ void layer_norm(const float *x, const float *gamma, const float *beta, float *ou
     }
 }
 
-void tinypoet_init(TinyPoetEngine *engine, const TinyPoetConfigC *config, const uint8_t *weights_ptr) {
-    memset(engine, 0, sizeof(TinyPoetEngine));
+void esp32_llm_init(ESP32LLMEngine *engine, const ESP32LLMConfigC *config, const uint8_t *weights_ptr) {
+    memset(engine, 0, sizeof(ESP32LLMEngine));
     engine->config = *config;
     engine->model_weights_ptr = weights_ptr;
-    tinypoet_reset_kv_cache(engine);
+    esp32_llm_reset_kv_cache(engine);
 }
 
-void tinypoet_reset_kv_cache(TinyPoetEngine *engine) {
+void esp32_llm_reset_kv_cache(ESP32LLMEngine *engine) {
     memset(engine->kv_cache, 0, sizeof(engine->kv_cache));
 }
 
-void tinypoet_forward_step(TinyPoetEngine *engine, int token_id, int pos, float *out_logits) {
+void esp32_llm_forward_step(ESP32LLMEngine *engine, int token_id, int pos, float *out_logits) {
     uint32_t n_layer = engine->config.n_layer;
     uint32_t n_head = engine->config.n_head;
     uint32_t n_embd = engine->config.n_embd;

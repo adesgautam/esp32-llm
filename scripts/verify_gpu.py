@@ -3,17 +3,17 @@ import sys
 import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from tinypoet.model import TinyPoet, TinyPoetConfig
-from tinypoet.tokenizer import BPETokenizer
+from esp32_llm.model import ESP32LLM, ESP32LLMConfig
+from esp32_llm.tokenizer import BPETokenizer
 
 def verify():
     device = "cpu"
     print("Loading PyTorch model...")
-    ckpt_path = "checkpoints/tinypoet_v2_bpe.pth"
+    ckpt_path = "checkpoints/esp32_llm_v2_bpe.pth"
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     
     config = ckpt['config']
-    model = TinyPoet(config)
+    model = ESP32LLM(config)
     model.load_state_dict(ckpt['model_state_dict'])
     model.eval()
 

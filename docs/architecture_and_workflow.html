@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TinyPoet ESP32 Architecture & Complete Technical Workflow</title>
+    <title>ESP32LLM ESP32 Architecture & Complete Technical Workflow</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -397,7 +397,7 @@
 
     <!-- Header Section -->
     <header>
-        <div class="title-badge">⚡ TinyPoet ESP32 Edge Intelligence</div>
+        <div class="title-badge">⚡ ESP32LLM ESP32 Edge Intelligence</div>
         <h1>End-to-End Architecture & Technical Workflow</h1>
         <p class="subtitle">Complete mathematical breakdown, memory mapping, BPE tokenization, PyTorch training, binary weight alignment, and zero-allocation C engine execution on ESP32 microcontrollers.</p>
 
@@ -483,7 +483,7 @@
             <div class="step-card">
                 <span class="step-number">STEP 04</span>
                 <h3 class="step-heading">PyTorch Model Retraining</h3>
-                <p class="step-desc">Trained the TinyPoet v2 Transformer (2L / 4H / 80D, 181,440 params) on GPU across 5.5M BPE tokens.</p>
+                <p class="step-desc">Trained the ESP32LLM v2 Transformer (2L / 4H / 80D, 181,440 params) on GPU across 5.5M BPE tokens.</p>
                 <ul class="step-details-list">
                     <li>150 Epochs over 193,500 total steps (~35 min train).</li>
                     <li>AdamW optimizer with Cosine LR decay (3e-4 &rarr; 1e-5).</li>
@@ -550,7 +550,7 @@
     <section>
         <h2 class="section-title">Internal SRAM Allocation Formula & Derivation</h2>
         <div class="tech-box">
-            <p style="color: var(--text-muted); margin-bottom: 1rem;">ESP32-D0WD-V3 provides 520 KB total physical SRAM. FreeRTOS kernel and ESP-IDF drivers leave ~280 KB usable DRAM heap. To guarantee zero Out-Of-Memory heap panics, TinyPoet enforces a 120 KB peak DRAM allocation limit:</p>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">ESP32-D0WD-V3 provides 520 KB total physical SRAM. FreeRTOS kernel and ESP-IDF drivers leave ~280 KB usable DRAM heap. To guarantee zero Out-Of-Memory heap panics, ESP32LLM enforces a 120 KB peak DRAM allocation limit:</p>
 
             <div class="formula-display">
                 KV_Cache = 2 &times; N<sub>layer</sub> &times; N<sub>head</sub> &times; N<sub>ctx</sub> &times; d<sub>head</sub> &times; 4 Bytes<br>
@@ -558,11 +558,11 @@
                 Total SRAM = KV_Cache (81.92 KB) + Activations (16.0 KB) + Stack (16.0 KB) = <span class="math-highlight">113.92 KB</span> &le; 120.0 KB Limit
             </div>
 
-            <pre><code><span class="code-comment">// C Engine KV-Cache Allocation Structure (tinypoet_engine.h)</span>
+            <pre><code><span class="code-comment">// C Engine KV-Cache Allocation Structure (esp32_llm_engine.h)</span>
 <span class="code-keyword">typedef struct</span> {
     <span class="code-keyword">float</span> key_cache[MAX_LAYERS][MAX_HEADS][MAX_BLOCK_SIZE][HEAD_DIM];   <span class="code-comment">// (2 * 4 * 64 * 20 * 4) = 40.96 KB</span>
     <span class="code-keyword">float</span> val_cache[MAX_LAYERS][MAX_HEADS][MAX_BLOCK_SIZE][HEAD_DIM];   <span class="code-comment">// (2 * 4 * 64 * 20 * 4) = 40.96 KB</span>
-} TinyPoetKVCache; <span class="code-comment">// Total KV-Cache = 81.92 KB statically allocated on stack/DRAM</span></code></pre>
+} ESP32LLMKVCache; <span class="code-comment">// Total KV-Cache = 81.92 KB statically allocated on stack/DRAM</span></code></pre>
         </div>
     </section>
 
@@ -631,7 +631,7 @@
                 <button class="tab-btn" onclick="showTab('gpu')">PyTorch GPU Reference Output</button>
             </div>
 
-            <div id="esp32-content" class="output-text">=== TinyPoet ESP32 Console (COM3) ===
+            <div id="esp32-content" class="output-text">=== ESP32LLM ESP32 Console (COM3) ===
 Prompt > love is
 
 --- GENERATED VERSE (ESP32 On-Device Inference) ---
@@ -656,7 +656,7 @@ without flowers wink on the</div>
     </section>
 
     <footer>
-        TinyPoet ESP32 Architecture & Workflow Documentation &bull; Zero-Allocation C Engine & PyTorch Implementation
+        ESP32LLM ESP32 Architecture & Workflow Documentation &bull; Zero-Allocation C Engine & PyTorch Implementation
     </footer>
 
 </div>

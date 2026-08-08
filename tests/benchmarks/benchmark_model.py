@@ -5,12 +5,12 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from tinypoet.model import TinyPoet, TinyPoetConfig
-from tinypoet.tokenizer import BPETokenizer
+from esp32_llm.model import ESP32LLM, ESP32LLMConfig
+from esp32_llm.tokenizer import BPETokenizer
 
 def benchmark():
     device = "cpu"
-    ckpt_path = "checkpoints/tinypoet_v2_bpe.pth"
+    ckpt_path = "checkpoints/esp32_llm_v2_bpe.pth"
     if not os.path.exists(ckpt_path):
         print(f"Error: {ckpt_path} not found.")
         return
@@ -19,7 +19,7 @@ def benchmark():
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     config = ckpt['config']
     
-    model = TinyPoet(config)
+    model = ESP32LLM(config)
     model.load_state_dict(ckpt['model_state_dict'])
     model.eval()
 
@@ -44,7 +44,7 @@ def benchmark():
     tok_per_sec = max_new_tokens / elapsed
 
     report = {
-        "model": "TinyPoet V2 (Lyrics Pivot)",
+        "model": "ESP32LLM V2 (Lyrics Pivot)",
         "parameters": model.count_parameters(),
         "host_cpu_inference_seconds": round(elapsed, 4),
         "host_cpu_tokens_per_sec": round(tok_per_sec, 2),

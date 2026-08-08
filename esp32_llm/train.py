@@ -1,5 +1,5 @@
 """
-Complete retraining pipeline for TinyPoet v2 with:
+Complete retraining pipeline for ESP32LLM v2 with:
   - 10+ MB poetry corpus
   - BPE tokenizer (256 tokens)
   - Improved hyperparameters (warmup + cosine decay, dropout, etc.)
@@ -19,8 +19,8 @@ import numpy as np
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from tinypoet.tokenizer import BPETokenizer
-from tinypoet.model import TinyPoet, TinyPoetConfig
+from esp32_llm.tokenizer import BPETokenizer
+from esp32_llm.model import ESP32LLM, ESP32LLMConfig
 
 
 class BPEDataset(Dataset):
@@ -85,7 +85,7 @@ def train():
         torch.backends.cudnn.benchmark = True
 
     print("=" * 60)
-    print("  TinyPoet v2 Retraining Pipeline")
+    print("  ESP32LLM v2 Retraining Pipeline")
     print(f"  Device: {device.upper()}")
     print("=" * 60)
 
@@ -128,7 +128,7 @@ def train():
 
     # ─── Step 4: Setup model ───
     BLOCK_SIZE = 64
-    config = TinyPoetConfig(
+    config = ESP32LLMConfig(
         vocab_size=VOCAB_SIZE,
         block_size=BLOCK_SIZE,
         n_layer=2,
@@ -138,7 +138,7 @@ def train():
         bias=True
     )
 
-    model = TinyPoet(config).to(device)
+    model = ESP32LLM(config).to(device)
     n_params = model.count_parameters()
     print(f"\nModel: {config.n_layer}L / {config.n_head}H / {config.n_embd}D")
     print(f"Parameters: {n_params:,}")
@@ -213,7 +213,7 @@ def train():
 
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            ckpt_path = os.path.join("checkpoints", "tinypoet_v2_bpe.pth")
+            ckpt_path = os.path.join("checkpoints", "esp32_llm_v2_bpe.pth")
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'config': config,
@@ -240,7 +240,7 @@ def train():
 
     # ─── Step 6: Generate sample poem ───
     model.eval()
-    ckpt = torch.load("checkpoints/tinypoet_v2_bpe.pth", map_location=device, weights_only=False)
+    ckpt = torch.load("checkpoints/esp32_llm_v2_bpe.pth", map_location=device, weights_only=False)
     model.load_state_dict(ckpt['model_state_dict'])
 
     prompts = ["the light ", "in the night ", "love is "]
@@ -258,7 +258,7 @@ def train():
 
     # Save summary
     summary = {
-        "model": "tinypoet_v2_bpe",
+        "model": "esp32_llm_v2_bpe",
         "vocab_size": VOCAB_SIZE,
         "tokenizer": "BPE",
         "n_layer": config.n_layer,
@@ -273,7 +273,7 @@ def train():
         "best_val_ppl": round(best_ppl, 2),
         "training_time_s": round(elapsed, 1),
     }
-    with open("checkpoints/tinypoet_v2_summary.json", "w") as f:
+    with open("checkpoints/esp32_llm_v2_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     print("\nDone! Next steps:")

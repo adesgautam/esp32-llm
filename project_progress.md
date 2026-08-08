@@ -1,4 +1,4 @@
-# TinyPoet ESP32 Master Empirical Walkthrough & Physical Deployment
+# ESP32LLM ESP32 Master Empirical Walkthrough & Physical Deployment
 
 This document presents the complete empirical study, GPU training matrix, zero-allocation C engine verification, and **physical SPI Flash deployment** to your **ESP32-D0WD-V3 board on COM3**.
 
