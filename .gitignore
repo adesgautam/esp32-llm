@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PlatformIO & ESP-IDF
+.pio/
+firmware/.pio/
+firmware/build/
+firmware/.vscode/
+
+# Datasets and Checkpoints
+datasets/raw/
+checkpoints/
+
+# IDEs and Environments
+.vscode/
+.idea/
+.venv/
+env/
+venv/
+*.swp

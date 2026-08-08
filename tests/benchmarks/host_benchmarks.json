@@ -1,0 +1,8 @@
+{
+    "model": "TinyPoet V2 (Lyrics Pivot)",
+    "parameters": 181440,
+    "host_cpu_inference_seconds": 0.2191,
+    "host_cpu_tokens_per_sec": 456.5,
+    "validation_loss": 3.699030637741089,
+    "perplexity": 40.40811526702864
+}

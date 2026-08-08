@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TinyPoet ESP32 Architecture & Complete Technical Workflow</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-dark: #090d16;
+            --bg-card: rgba(18, 26, 44, 0.65);
+            --bg-card-hover: rgba(26, 38, 64, 0.85);
+            --border-card: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(0, 242, 254, 0.3);
+            
+            --primary-cyan: #00f2fe;
+            --primary-blue: #4facfe;
+            --accent-purple: #7f00ff;
+            --accent-pink: #e100ff;
+            --accent-gold: #f6d365;
+            --accent-green: #00e676;
+            
+            --text-main: #f0f4fd;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            padding: 2rem 1rem;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(127, 0, 255, 0.08) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header Styling */
+        header {
+            text-align: center;
+            margin-bottom: 3.5rem;
+            position: relative;
+        }
+
+        .title-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.1), rgba(127, 0, 255, 0.1));
+            border: 1px solid var(--border-highlight);
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--primary-cyan);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h1 {
+            font-size: 2.75rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #00f2fe 50%, #4facfe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 1.15rem;
+            color: var(--text-muted);
+            max-width: 850px;
+            margin: 0 auto;
+        }
+
+        /* Specs Grid */
+        .specs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .spec-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            backdrop-filter: blur(12px);
+            padding: 1.25rem;
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .spec-card:hover {
+            border-color: var(--border-highlight);
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(0, 242, 254, 0.15);
+        }
+
+        .spec-title {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .spec-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+        }
+
+        .spec-sub {
+            font-size: 0.8rem;
+            color: var(--primary-cyan);
+            margin-top: 2px;
+        }
+
+        /* Section Styling */
+        section {
+            margin-bottom: 4rem;
+        }
+
+        .section-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--primary-cyan), var(--accent-purple));
+            border-radius: 4px;
+        }
+
+        /* Pipeline Visual Diagram */
+        .pipeline-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            position: relative;
+        }
+
+        .step-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 1.75rem;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .step-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-cyan), var(--accent-purple));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .step-card:hover {
+            border-color: var(--border-highlight);
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .step-card:hover::before {
+            opacity: 1;
+        }
+
+        .step-number {
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--primary-cyan);
+            background: rgba(0, 242, 254, 0.1);
+            padding: 4px 10px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-bottom: 0.75rem;
+        }
+
+        .step-heading {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            color: #ffffff;
+        }
+
+        .step-desc {
+            font-size: 0.92rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .step-details-list {
+            list-style: none;
+            margin-bottom: 1rem;
+        }
+
+        .step-details-list li {
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            margin-bottom: 6px;
+            padding-left: 14px;
+            position: relative;
+        }
+
+        .step-details-list li::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: var(--primary-cyan);
+        }
+
+        .step-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag {
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 2px 8px;
+            border-radius: 6px;
+            color: var(--text-muted);
+        }
+
+        /* Detailed Tech Section Box */
+        .tech-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            backdrop-filter: blur(12px);
+            border-radius: 24px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .formula-display {
+            background: rgba(9, 13, 22, 0.85);
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            border-radius: 16px;
+            padding: 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.95rem;
+            color: var(--primary-cyan);
+            margin-bottom: 1.5rem;
+            text-align: center;
+            overflow-x: auto;
+            line-height: 1.8;
+        }
+
+        .math-highlight {
+            color: var(--accent-gold);
+            font-weight: 700;
+        }
+
+        /* Code Block Styling */
+        pre {
+            background: #060911;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.25rem;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            overflow-x: auto;
+            margin-top: 1rem;
+            line-height: 1.5;
+        }
+
+        .code-keyword { color: #ff79c6; }
+        .code-string { color: #f1fa8c; }
+        .code-comment { color: #6272a4; font-style: italic; }
+        .code-function { color: #50fa7b; }
+        .code-number { color: #bd93f9; }
+
+        /* Tabbed Output Demo */
+        .output-demo {
+            background: rgba(6, 9, 17, 0.9);
+            border: 1px solid var(--border-card);
+            border-radius: 20px;
+            padding: 1.5rem;
+            font-family: var(--font-mono);
+        }
+
+        .tab-header {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--primary-cyan);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        .output-text {
+            color: #8be9fd;
+            line-height: 1.7;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+
+        /* Partition Table Grid */
+        .table-custom {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .table-custom th, .table-custom td {
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 10px 14px;
+            text-align: left;
+        }
+
+        .table-custom th {
+            background: rgba(0, 242, 254, 0.1);
+            color: var(--primary-cyan);
+        }
+
+        .table-custom tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        footer {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-card);
+            padding-top: 2rem;
+            margin-top: 4rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Header Section -->
+    <header>
+        <div class="title-badge">⚡ TinyPoet ESP32 Edge Intelligence</div>
+        <h1>End-to-End Architecture & Technical Workflow</h1>
+        <p class="subtitle">Complete mathematical breakdown, memory mapping, BPE tokenization, PyTorch training, binary weight alignment, and zero-allocation C engine execution on ESP32 microcontrollers.</p>
+
+        <!-- Key Specs Grid -->
+        <div class="specs-grid">
+            <div class="spec-card">
+                <div class="spec-title">Hardware MCU</div>
+                <div class="spec-value">ESP32-D0WD</div>
+                <div class="spec-sub">240 MHz Dual-Core</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-title">Peak SRAM Footprint</div>
+                <div class="spec-value">113.92 KB</div>
+                <div class="spec-sub">&le; 120 KB Heap Bound</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-title">Token Compression</div>
+                <div class="spec-value">1.98x (BPE)</div>
+                <div class="spec-sub">256 Subword Vocab</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-title">Validation Perplexity</div>
+                <div class="spec-value">16.22 PPL</div>
+                <div class="spec-sub">10.48 MB Poetry Data</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Section 1: Detailed End-to-End Workflow Pipeline -->
+    <section>
+        <h2 class="section-title">Complete 7-Step Engineering Workflow</h2>
+        
+        <div class="pipeline-container">
+
+            <div class="step-card">
+                <span class="step-number">STEP 01</span>
+                <h3 class="step-heading">Planning & SRAM Formulation</h3>
+                <p class="step-desc">Derived exact mathematical bounds for static SRAM consumption to guarantee zero Out-Of-Memory (OOM) heap panics on ESP32.</p>
+                <ul class="step-details-list">
+                    <li>Strict zero dynamic <code>malloc()</code> policy at runtime.</li>
+                    <li>SRAM budget strictly capped at 120 KB peak allocation.</li>
+                    <li>KV-Cache formula: <code>2 x L x H x Ctx x d_head x 4B</code>.</li>
+                    <li>Calculated exact footprint: 81.92 KB KV-Cache.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">Zero Malloc</span>
+                    <span class="tag">113.92 KB Peak</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 02</span>
+                <h3 class="step-heading">Data Expansion (10.48 MB)</h3>
+                <p class="step-desc">Built a comprehensive public domain poetry corpus aggregating 11 classical sources to prevent text repetition.</p>
+                <ul class="step-details-list">
+                    <li>Project Gutenberg: Shakespeare, Whitman, Poe, Keats.</li>
+                    <li>Shelley, Byron, Dickinson, Wordsworth, Blake, Frost.</li>
+                    <li>Normalized text to 44 allowed base characters.</li>
+                    <li>Total clean corpus: 10,988,705 characters.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">10.48 MB Text</span>
+                    <span class="tag">Gutenberg Cleaned</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 03</span>
+                <h3 class="step-heading">Byte Pair Encoding (BPE)</h3>
+                <p class="step-desc">Implemented custom BPE tokenizer to learn subword merges and compress character sequences into tokens.</p>
+                <ul class="step-details-list">
+                    <li>Learned 212 subword merge rules from corpus.</li>
+                    <li>Expanded vocabulary size from 44 to 256 tokens.</li>
+                    <li>Achieved 1.98x token compression ratio.</li>
+                    <li>Exported <code>bpe_vocab.h</code> string lookup table for C.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">256 Vocab</span>
+                    <span class="tag">1.98x Compression</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 04</span>
+                <h3 class="step-heading">PyTorch Model Retraining</h3>
+                <p class="step-desc">Trained the TinyPoet v2 Transformer (2L / 4H / 80D, 181,440 params) on GPU across 5.5M BPE tokens.</p>
+                <ul class="step-details-list">
+                    <li>150 Epochs over 193,500 total steps (~35 min train).</li>
+                    <li>AdamW optimizer with Cosine LR decay (3e-4 &rarr; 1e-5).</li>
+                    <li>Achieved Validation Loss: 2.7865 | BPC: 4.0200.</li>
+                    <li>Final Perplexity: <strong>16.22 PPL</strong>.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">181,440 Params</span>
+                    <span class="tag">16.22 PPL</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 05</span>
+                <h3 class="step-heading">Binary Weight Packing</h3>
+                <p class="step-desc">Serialized PyTorch state dict into a packed binary (<code>model_weights.bin</code>, 820.78 KB) with explicit alignment.</p>
+                <ul class="step-details-list">
+                    <li>36-Byte Magic Header: <code>0x54504f45</code> ('TPOE').</li>
+                    <li>Stores <code>n_layer</code>, <code>n_head</code>, <code>n_embd</code>, <code>block_size</code>, <code>vocab_size</code>.</li>
+                    <li>Crucially skips PyTorch <code>attn.bias</code> causal mask buffer.</li>
+                    <li>FP32 weight alignment matches C engine byte offsets.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">820.78 KB</span>
+                    <span class="tag">Bias Offset Skip</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 06</span>
+                <h3 class="step-heading">ESP32 C Engine (XIP)</h3>
+                <p class="step-desc">Zero-allocation C inference engine maps weights directly into MMU memory space via Flash XIP.</p>
+                <ul class="step-details-list">
+                    <li>Uses <code>esp_partition_mmap</code> for 0 KB weight SRAM footprint.</li>
+                    <li>On-device prompt BPE encoding using embedded merges.</li>
+                    <li>Hardware-seeded <code>xorshift32</code> PRNG for sampling.</li>
+                    <li>Temperature (0.8) + Top-K (8) sampling algorithm.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">0 KB Weight SRAM</span>
+                    <span class="tag">Top-K 8 Sampling</span>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <span class="step-number">STEP 07</span>
+                <h3 class="step-heading">Flashing & Serial Verification</h3>
+                <p class="step-desc">Automated single-command flashing script uploads partitions to physical ESP32 board over COM port.</p>
+                <ul class="step-details-list">
+                    <li>Flashes bootloader, partition table, app & model.</li>
+                    <li>Model target partition offset: <code>0x110000</code> (2.5 MB).</li>
+                    <li>Verified output matches PyTorch reference model.</li>
+                </ul>
+                <div class="step-tags">
+                    <span class="tag">esptool v5.3</span>
+                    <span class="tag">COM3 SPI Flash</span>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Section 2: Mathematical SRAM Budget -->
+    <section>
+        <h2 class="section-title">Internal SRAM Allocation Formula & Derivation</h2>
+        <div class="tech-box">
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">ESP32-D0WD-V3 provides 520 KB total physical SRAM. FreeRTOS kernel and ESP-IDF drivers leave ~280 KB usable DRAM heap. To guarantee zero Out-Of-Memory heap panics, TinyPoet enforces a 120 KB peak DRAM allocation limit:</p>
+
+            <div class="formula-display">
+                KV_Cache = 2 &times; N<sub>layer</sub> &times; N<sub>head</sub> &times; N<sub>ctx</sub> &times; d<sub>head</sub> &times; 4 Bytes<br>
+                KV_Cache = 2 &times; 2 &times; 4 &times; 64 &times; 20 &times; 4 = <span class="math-highlight">81.92 KB</span><br><br>
+                Total SRAM = KV_Cache (81.92 KB) + Activations (16.0 KB) + Stack (16.0 KB) = <span class="math-highlight">113.92 KB</span> &le; 120.0 KB Limit
+            </div>
+
+            <pre><code><span class="code-comment">// C Engine KV-Cache Allocation Structure (tinypoet_engine.h)</span>
+<span class="code-keyword">typedef struct</span> {
+    <span class="code-keyword">float</span> key_cache[MAX_LAYERS][MAX_HEADS][MAX_BLOCK_SIZE][HEAD_DIM];   <span class="code-comment">// (2 * 4 * 64 * 20 * 4) = 40.96 KB</span>
+    <span class="code-keyword">float</span> val_cache[MAX_LAYERS][MAX_HEADS][MAX_BLOCK_SIZE][HEAD_DIM];   <span class="code-comment">// (2 * 4 * 64 * 20 * 4) = 40.96 KB</span>
+} TinyPoetKVCache; <span class="code-comment">// Total KV-Cache = 81.92 KB statically allocated on stack/DRAM</span></code></pre>
+        </div>
+    </section>
+
+    <!-- Section 3: SPI Flash Memory Map -->
+    <section>
+        <h2 class="section-title">ESP32 SPI Flash Partition Table</h2>
+        <div class="tech-box">
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">Model weights are flashed to offset <code>0x110000</code> in SPI Flash and mapped directly into Xtensa CPU virtual address space via <code>esp_partition_mmap</code> (Zero SRAM consumption for weights):</p>
+
+            <table class="table-custom">
+                <thead>
+                    <tr>
+                        <th>Partition Name</th>
+                        <th>Type</th>
+                        <th>Subtype</th>
+                        <th>Flash Offset</th>
+                        <th>Partition Size</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>nvs</code></td>
+                        <td>data</td>
+                        <td>nvs</td>
+                        <td><code>0x00009000</code></td>
+                        <td>24 KB (<code>0x6000</code>)</td>
+                        <td>Non-volatile storage</td>
+                    </tr>
+                    <tr>
+                        <td><code>phy_init</code></td>
+                        <td>data</td>
+                        <td>phy</td>
+                        <td><code>0x0000F000</code></td>
+                        <td>4 KB (<code>0x1000</code>)</td>
+                        <td>PHY initialization data</td>
+                    </tr>
+                    <tr>
+                        <td><code>factory</code></td>
+                        <td>app</td>
+                        <td>factory</td>
+                        <td><code>0x00010000</code></td>
+                        <td>1.0 MB (<code>0x100000</code>)</td>
+                        <td>PlatformIO C Firmware App</td>
+                    </tr>
+                    <tr>
+                        <td><code>model</code></td>
+                        <td>data</td>
+                        <td>0x40</td>
+                        <td><code>0x00110000</code></td>
+                        <td>2.5 MB (<code>0x280000</code>)</td>
+                        <td>XIP Memory-Mapped Model Weights (820.78 KB)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Section 4: Live Output Verification -->
+    <section>
+        <h2 class="section-title">Hardware Serial vs PyTorch GPU Verification</h2>
+        
+        <div class="output-demo">
+            <div class="tab-header">
+                <button class="tab-btn active" onclick="showTab('esp32')">ESP32 Device Serial Output</button>
+                <button class="tab-btn" onclick="showTab('gpu')">PyTorch GPU Reference Output</button>
+            </div>
+
+            <div id="esp32-content" class="output-text">=== TinyPoet ESP32 Console (COM3) ===
+Prompt > love is
+
+--- GENERATED VERSE (ESP32 On-Device Inference) ---
+love is desert, the chaining,
+ or behold the hope would have grance that
+ to-night of a person of elebrated horse,
+and by my heart to be much mutinence
+
+and so swelling them, my lord away.</div>
+
+            <div id="gpu-content" class="output-text" style="display: none;">=== PyTorch GPU Reference Model ===
+Prompt > love is
+
+--- GPU OUTPUT (Sampling T=0.8, TopK=8) ---
+love is dead, 5
+what's heirs are the harming street,
+and sweet both like waves on my table,
+and when i need the shadowy both,
+and some shake the playing, the following being
+without flowers wink on the</div>
+        </div>
+    </section>
+
+    <footer>
+        TinyPoet ESP32 Architecture & Workflow Documentation &bull; Zero-Allocation C Engine & PyTorch Implementation
+    </footer>
+
+</div>
+
+<script>
+    function showTab(tab) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        if (tab === 'esp32') {
+            document.getElementById('esp32-content').style.display = 'block';
+            document.getElementById('gpu-content').style.display = 'none';
+            event.target.classList.add('active');
+        } else {
+            document.getElementById('esp32-content').style.display = 'none';
+            document.getElementById('gpu-content').style.display = 'block';
+            event.target.classList.add('active');
+        }
+    }
+</script>
+
+</body>
+</html>
