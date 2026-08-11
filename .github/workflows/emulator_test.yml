@@ -1,0 +1,58 @@
+name: Emulator Testing (Wokwi)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO
+      run: pip install platformio esptool
+
+    - name: Build Firmware
+      working-directory: ./firmware
+      run: pio run
+
+    - name: Merge Binaries for Wokwi
+      run: |
+        python -m esptool --chip esp32 merge_bin -o flash_pro.bin 0x1000 firmware/.pio/build/esp32dev/bootloader.bin 0x8000 firmware/.pio/build/esp32dev/partitions.bin 0x10000 firmware/.pio/build/esp32dev/firmware.bin 0x00290000 models/Micro-LM-Pro/model.bin
+
+    - name: Setup Wokwi Config
+      run: |
+        echo '{
+          "version": 1,
+          "author": "Antigravity",
+          "editor": "wokwi",
+          "parts": [
+            { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} }
+          ],
+          "connections": [
+            [ "esp:TX", "$serialMonitor:RX", "", [] ],
+            [ "esp:RX", "$serialMonitor:TX", "", [] ]
+          ]
+        }' > diagram.json
+        
+        echo '[wokwi]
+        version = 1
+        firmware = "flash_pro.bin"
+        elf = "firmware/.pio/build/esp32dev/firmware.elf"' > wokwi.toml
+
+    - name: Run Wokwi Simulation
+      uses: wokwi/wokwi-ci-action@v1
+      env:
+        WOKWI_CLI_TOKEN: ${{ secrets.WOKWI_CLI_TOKEN }}
+      with:
+        expect_text: 'Model initialized.'
+        fail_text: 'Guru Meditation Error'
+        timeout: 30000

@@ -8,15 +8,31 @@ __pycache__/
 firmware/.pio/
 firmware/build/
 firmware/.vscode/
+firmware/compile_commands.json
 
 # Datasets and Checkpoints
 datasets/raw/
 checkpoints/
 
-# IDEs and Environments
+# IDEs, Agents & Internal Logs
 .vscode/
 .idea/
 .venv/
+.agents/
+.codegraph/
 env/
 venv/
 *.swp
+logs/
+
+# Flash binaries & QEMU emulator installation
+flash_*.bin
+flash_image.bin
+qemu/
+qemu.zip
+qemu.tar.xz
+
+# Docs folder - only track emulator.md
+docs/*
+!docs/emulator.md
+

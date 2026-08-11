@@ -10,10 +10,11 @@ extern "C" {
 #endif
 
 // Engine Constants & Upper Bounds (Tightened to SRAM budget)
-#define MAX_LAYERS 2
-#define MAX_HEADS 4
-#define MAX_EMBD 80
-#define MAX_BLOCK_SIZE 64
+#define MAX_LAYERS 4
+#define MAX_HEADS 8
+#define MAX_KV_HEADS 1
+#define MAX_EMBD 512
+#define MAX_BLOCK_SIZE 256 // Dropped to 256 to fit inside standard ESP32 SRAM
 #define MAX_VOCAB_SIZE 256
 
 typedef enum {
@@ -26,6 +27,7 @@ typedef enum {
 typedef struct {
     uint32_t n_layer;
     uint32_t n_head;
+    uint32_t n_kv_head;
     uint32_t n_embd;
     uint32_t block_size;
     uint32_t vocab_size;
@@ -35,8 +37,10 @@ typedef struct {
 typedef struct {
     ESP32LLMConfigC config;
     
-    // KV Cache: shape [n_layer, 2 (k,v), block_size, n_embd] = 81.92 KB
-    float kv_cache[MAX_LAYERS][2][MAX_BLOCK_SIZE][MAX_EMBD];
+    // KV Cache: [layer, 2 (k,v), max_ctx, kv_head, head_dim] in INT4
+    // head_dim max = 512 / 8 = 64. 64 elements in INT4 = 32 bytes
+    uint8_t kv_cache[MAX_LAYERS][2][MAX_BLOCK_SIZE][MAX_KV_HEADS][64 / 2];
+    float kv_cache_scales[MAX_LAYERS][2][MAX_BLOCK_SIZE][MAX_KV_HEADS];
     
     // Working activations buffer (Zero heap allocations during step)
     float x_buf[MAX_EMBD];

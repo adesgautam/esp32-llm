@@ -10,6 +10,7 @@ class ESP32LLMConfig:
         block_size: int = 64,
         n_layer: int = 4,
         n_head: int = 4,
+        n_kv_head: int = None,
         n_embd: int = 64,
         dropout: float = 0.0,
         bias: bool = True
@@ -18,21 +19,69 @@ class ESP32LLMConfig:
         self.block_size = block_size
         self.n_layer = n_layer
         self.n_head = n_head
+        self.n_kv_head = n_kv_head if n_kv_head is not None else n_head
         self.n_embd = n_embd
         self.dropout = dropout
         self.bias = bias
+
+    @classmethod
+    def option_a(cls):
+        """Max Context Architecture (~13.7M params, 2048 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=2048, n_layer=2, n_head=12, n_kv_head=1, n_embd=768)
+
+    @classmethod
+    def option_b(cls):
+        """Balanced Architecture (~11.4M params, 1024 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=1024, n_layer=4, n_head=8, n_kv_head=1, n_embd=512)
+
+    @classmethod
+    def option_c(cls):
+        """OTA Safe Architecture (~3.1M params, 1024 ctx, MQA, RoPE)"""
+        return cls(vocab_size=256, block_size=1024, n_layer=4, n_head=4, n_kv_head=1, n_embd=256)
+
+    @classmethod
+    def option_a_plus(cls):
+        """Massive Architecture to hit PPL 5-6 (~42M params, 1024 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=1024, n_layer=6, n_head=12, n_kv_head=1, n_embd=768)
+
+    @classmethod
+    def option_pico(cls):
+        """Standard ESP32 Architecture (~150K params, 128 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=128, n_layer=4, n_head=4, n_kv_head=1, n_embd=64)
+
+def get_rotary_matrix(seq_len, dim, base=10000):
+    theta = 1.0 / (base ** (torch.arange(0, dim, 2).float() / dim))
+    seq_idx = torch.arange(seq_len).float()
+    idx_theta = torch.einsum('i,j->ij', seq_idx, theta)
+    idx_theta = torch.cat([idx_theta, idx_theta], dim=-1) # (seq_len, dim)
+    cos = idx_theta.cos().unsqueeze(0).unsqueeze(0) # (1, 1, seq_len, dim)
+    sin = idx_theta.sin().unsqueeze(0).unsqueeze(0)
+    return cos, sin
+
+def apply_rope(x, cos, sin):
+    d = x.shape[-1] // 2
+    x1 = x[..., :d]
+    x2 = x[..., d:]
+    x_rot = torch.cat([-x2, x1], dim=-1)
+    return x * cos + x_rot * sin
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config: ESP32LLMConfig):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.n_head = config.n_head
+        self.n_kv_head = getattr(config, "n_kv_head", config.n_head)
+        self.n_embd = config.n_embd
+        self.head_dim = config.n_embd // config.n_head
+        assert self.n_head % self.n_kv_head == 0
+        
+        # key, query, value projections for GQA/MQA
+        self.q_proj = nn.Linear(config.n_embd, self.n_head * self.head_dim, bias=config.bias)
+        self.k_proj = nn.Linear(config.n_embd, self.n_kv_head * self.head_dim, bias=config.bias)
+        self.v_proj = nn.Linear(config.n_embd, self.n_kv_head * self.head_dim, bias=config.bias)
+        
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        # regularization
-        self.n_head = config.n_head
-        self.n_embd = config.n_embd
         
         # causal mask buffer
         self.register_buffer(
@@ -40,15 +89,31 @@ class CausalSelfAttention(nn.Module):
             torch.tril(torch.ones(config.block_size, config.block_size))
             .view(1, 1, config.block_size, config.block_size)
         )
+        
+        # precompute RoPE cache
+        cos, sin = get_rotary_matrix(config.block_size, self.head_dim)
+        self.register_buffer("cos_cached", cos)
+        self.register_buffer("sin_cached", sin)
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = self.q_proj(x).view(B, T, self.n_head, self.head_dim).transpose(1, 2) # (B, nh, T, hs)
+        k = self.k_proj(x).view(B, T, self.n_kv_head, self.head_dim).transpose(1, 2) # (B, nkv, T, hs)
+        v = self.v_proj(x).view(B, T, self.n_kv_head, self.head_dim).transpose(1, 2) # (B, nkv, T, hs)
+        
+        # apply RoPE
+        cos = self.cos_cached[:, :, :T, :]
+        sin = self.sin_cached[:, :, :T, :]
+        q = apply_rope(q, cos, sin)
+        k = apply_rope(k, cos, sin)
+
+        # repeat k and v for MQA/GQA
+        num_kv_groups = self.n_head // self.n_kv_head
+        if num_kv_groups > 1:
+            k = torch.repeat_interleave(k, repeats=num_kv_groups, dim=1)
+            v = torch.repeat_interleave(v, repeats=num_kv_groups, dim=1)
 
         # causal self-attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -94,7 +159,6 @@ class ESP32LLM(nn.Module):
 
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd, elementwise_affine=config.bias),
         ))
@@ -123,11 +187,8 @@ class ESP32LLM(nn.Module):
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is {self.config.block_size}"
         
-        pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
-
         tok_emb = self.transformer.wte(idx) # (b, t, n_embd)
-        pos_emb = self.transformer.wpe(pos) # (t, n_embd)
-        x = tok_emb + pos_emb
+        x = tok_emb
         
         for block in self.transformer.h:
             x = block(x)

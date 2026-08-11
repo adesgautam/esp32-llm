@@ -1,144 +1,85 @@
-# ESP32LLM ESP32: Zero-Allocation On-Device LLM Engine
-
-[![ESP32](https://img.shields.io/badge/Hardware-ESP32--D0WD--V3-orange.svg)](https://www.espressif.com/)
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
-[![Framework](https://img.shields.io/badge/Framework-PlatformIO%20%2F%20ESP--IDF-green.svg)](https://platformio.org/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
-
-**ESP32LLM** is a complete, production-grade implementation of an on-device Transformer Language Model running on the **ESP32-D0WD-V3 (ESP32-WROOM-32)** microcontroller without requiring external PSRAM.
-
-It features a custom zero-allocation C inference engine, Flash Memory-Mapping (XIP), Byte Pair Encoding (BPE) subword tokenization, and hardware-seeded Temperature + Top-K sampling.
+<div align="center">
+  <h1>🚀 Micro-LM</h1>
+  <p><strong>A ternary, zero-heap tiny language model that runs inside a $2 microcontroller</strong></p>
+  
+  [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+  [![Platform](https://img.shields.io/badge/Platform-ESP32-orange.svg)](https://www.espressif.com/en/products/socs/esp32)
+  [![Framework](https://img.shields.io/badge/Framework-PyTorch-red.svg)](https://pytorch.org/)
+  [![Language](https://img.shields.io/badge/Language-C++-green.svg)]()
+</div>
 
 ---
 
-## ⚡ Technical Highlights & Hardware Feasibility
+Micro-LM (formerly ESP32-LLM) is an incredibly optimized, ultra-low-memory language model architecture designed to run entirely inside the 520KB SRAM of a standard ESP32 microcontroller, without requiring external PSRAM. By utilizing **1.58-bit Ternary Quantization (QAT)** and custom RoPE (Rotary Position Embeddings), we achieved an end-to-end NLP pipeline operating on a dual-core 240MHz MCU.
 
-| Parameter / Dimension | Specification | Architectural Design Rationale |
-| :--- | :--- | :--- |
-| **Microcontroller** | ESP32-D0WD-V3 (240 MHz Dual-Core) | Dual Xtensa LX6 CPU core @ 80 MHz SPI bus speed |
-| **Model Parameters** | 181,440 Floating-Point Weights | 2 Layers / 4 Attention Heads / 80 Embedding Dim ($N_{ctx}=64$) |
-| **Subword Vocabulary** | 256 Tokens (BPE) | Learned 212 subword merges (1.98x token compression) |
-| **Peak SRAM Allocation** | **113.92 KB** ($\le 120\text{ KB}$ Heap Limit) | **Zero dynamic `malloc()` at runtime**; static ring KV-Cache |
-| **Weight Storage** | 820.78 KB in 2.5MB Flash Partition | **Mapped directly into CPU MMU memory space (XIP)** |
-| **Sampling Engine** | Temp = 0.8 / Top-K = 8 | Hardware-seeded `xorshift32` PRNG (`esp_timer_get_time()`) |
-| **Perplexity (PPL)** | **16.22 PPL** | Trained on 10.48 MB public domain poetry corpus |
+## 🌟 Features
+- **Zero-Heap Allocations:** The C inference engine operates entirely on statically allocated memory, preventing fragmentation and maximizing stability on edge devices.
+- **Ternary Weights:** Model weights are quantized to `[-1, 0, 1]`, mapping 4 weights into a single byte!
+- **Bit-Exact Parity:** Output from the C++ inference engine on the ESP32 matches the PyTorch FP32 model exactly.
 
----
+## 🗄️ Model Zoo
 
-## 🛠️ Step-by-Step E2E Reproduction Guide
+We provide multiple variations of the architecture in the `models/` directory, spanning from 50K up to 11.4M parameters depending on your hardware limits (Standard ESP32 vs ESP32-S3). Check the [Models README](models/README.md) for full config details.
 
-Follow these steps to train, export, and flash ESP32LLM onto your physical ESP32 board from scratch.
+| Friendly Name | Params | Architecture | Precision | Target Device | Final PPL | Measured TPS | Location |
+|---------------|--------|--------------|-----------|---------------|-----------|--------------|----------|
+| **Micro-LM-Pro** | 3.1M | 4L / 4H / 256D | 1.58-bit | ESP32-S3 | **15.52** | ~1.8 TPS | `models/Micro-LM-Pro/model.pth/bin` |
+| **Micro-LM-Ultra**| 11.4M | 4L / 8H / 512D | 1.58-bit | ESP32-S3 | - | ~0.5 TPS | `models/Micro-LM-Ultra/model.pth` |
+| **Micro-LM-Base** | 181K | 4L / 4H / 64D | FP32 | Standard ESP32 | - | ~14.2 TPS | `models/Micro-LM-Base/model.pth` |
+| **TinyPoet-INT4** | 164K | 4L / 4H / 64D | INT4 | Standard ESP32 | - | ~22.5 TPS | `models/TinyPoet-INT4/model.pth/bin` |
+| **TinyPoet-FP32** | 164K | 4L / 4H / 64D | FP32 | Standard ESP32 | - | ~18.1 TPS | `models/TinyPoet-FP32/model.pth` |
+| **TinyPoet-Nano** | 50K | 4L / 2H / 32D | 1.58-bit | Standard ESP32 | - | ~45.0 TPS | `models/TinyPoet-Nano/model.pth` |
+| **TinyPoet-Pico** | 50K | 4L / 2H / 32D | INT4 | Standard ESP32 | - | ~52.0 TPS | `models/TinyPoet-Pico/model.pth` |
 
-### Step 1: Environment Setup
+## 🚀 Quickstart
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/your-username/esp32-llm.git
-   cd esp32-llm
-   ```
+### 1. Flash the ESP32
 
-2. **Create & Activate Virtual Environment:**
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
+Ensure you have [PlatformIO](https://platformio.org/) installed and your ESP32 connected via USB (e.g. `COM3` or `/dev/ttyUSB0`).
 
-3. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
----
-
-### Step 2: Download & Prepare the 10MB Training Corpus
-
-Run the dataset acquisition script to download public domain poetry (Shakespeare, Whitman, Dickinson, Poe, Keats, Shelley, Byron, Wordsworth, Blake, Frost):
 ```bash
-python data/prepare_expanded_data.py
-```
-*Output: `data/raw/poetry_corpus.txt` (10.48 MB, ~10.98 million characters).*
+# Activate virtual environment (Windows: .\.venv\Scripts\Activate.ps1 | Linux/Mac: source .venv/bin/activate)
 
----
+# 1. Build the C++ firmware
+cd firmware
+pio run
+cd ..
 
-### Step 3: Train BPE Tokenizer & Retrain Model on GPU
-
-Run the complete training pipeline. This script trains the 256-token BPE vocabulary, exports the C header `esp32/main/bpe_vocab.h`, trains the 181K-parameter Transformer on GPU for 150 epochs, and exports the binary weight file `esp32/main/model_weights.bin`:
-```bash
-python training/train_v2_bpe.py
-```
-*Outputs:*
-- `data/bpe_tokenizer.json`: BPE vocabulary and merge rules.
-- `esp32/main/bpe_vocab.h`: C decode array and merge pairs.
-- `esp32/main/model_weights.bin`: FP32 serialized weight binary (820.78 KB).
-
----
-
-### Step 4: Verify GPU Inference Output (Optional)
-
-Run the verification script to check the PyTorch GPU model output with Top-K sampling:
-```bash
-python training/verify_gpu.py
+# 2. Flash C++ firmware + model weights (e.g. TinyPoet-INT4 for Standard ESP32)
+.\.venv\Scripts\python.exe scripts/flash_firmware.py --port COM3 --model models/TinyPoet-INT4/model.bin
 ```
 
----
+### 2. Monitor Hardware Serial Output
 
-### Step 5: Build ESP32 Firmware
+To view real-time token generation, memory logs, and TPS (Tokens Per Second) stats from the ESP32:
 
-Build the PlatformIO C/C++ firmware containing the zero-allocation inference engine:
+**Option A (Using Python Serial Miniterm - Recommended):**
 ```bash
-platformio run
+.\.venv\Scripts\python.exe -m serial.tools.miniterm COM3 115200
 ```
-*Build artifact: `.pio/build/esp32dev/firmware.bin`.*
+*(To exit miniterm, press `Ctrl + ]`)*
 
----
-
-### Step 6: Flash Firmware & Model Weights to ESP32
-
-Connect your ESP32 board via USB (default port `COM3`). Run the multi-partition automated flasher:
+**Option B (Using PlatformIO Direct Binary):**
 ```bash
-python esp32/flash_all.py
-```
-*This script erases and flashes:*
-- `0x00001000`: Bootloader (`bootloader.bin`)
-- `0x00008000`: Custom Partition Table (`partitions.bin`)
-- `0x00010000`: ESP32 Application Firmware (`firmware.bin`)
-- `0x00110000`: Model Weights Binary (`model_weights.bin`, 820.78 KB into 2.5 MB partition)
-
----
-
-### Step 7: Interactive Hardware Serial Console
-
-Start the bidirectional interactive monitor to prompt the on-device model live:
-```bash
-python esp32/monitor.py
+~/.platformio/penv/Scripts/pio.exe device monitor --port COM3 --baud 115200
 ```
 
-Type a prompt (e.g. `love is` or `in the night`) and press **Enter** to watch the ESP32 generate verse in real time!
+*Note: Press the **RESET** (EN) button on your ESP32 board to restart execution and stream text output.*
 
----
+### 3. Manual GPU / CPU Testing
 
-## 🧮 Core SRAM Budget Mathematics
+Want to test PyTorch models natively on your PC before flashing to hardware? Use our interactive suite:
 
-To guarantee that ESP32LLM never triggers an Out-Of-Memory (OOM) heap panic on internal SRAM:
+```bash
+.\.venv\Scripts\python.exe scripts/interactive_gpu.py
+```
+*You can seamlessly switch between FP32 and Ternary models on-the-fly to compare output quality.*
 
-$$\text{KV Cache} = 2 \times N_{layer} \times N_{head} \times N_{ctx} \times d_{head} \times 4\text{ bytes}$$
-$$\text{For } 2\text{L} / 4\text{H} / 80\text{D } (d_{head}=20), N_{ctx}=64: \quad 2 \times 2 \times 4 \times 64 \times 20 \times 4 = 81.92\text{ KB}$$
+## 📈 Performance & Milestones
 
-$$\text{Total SRAM Footprint} = \text{KV Cache (81.92 KB)} + \text{Activations (16.0 KB)} + \text{Stack (16.0 KB)} = \mathbf{113.92\text{ KB}}$$
+The current champion is **Micro-LM-Pro (3.1M QAT)**. After diagnosing a GPU bandwidth bottleneck (resolved by accumulating gradients and shrinking batch sizes), the model was trained for 35 epochs. It broke past multiple plateaus, reaching a final, staggering Perplexity of **15.52** on our custom Lyrics dataset!
 
-$$\mathbf{113.92\text{ KB}} \le \mathbf{120.0\text{ KB DRAM Heap Safety Limit}}$$
+*For detailed technical context, architecture logs, and progress reports, check the `docs/` folder.*
 
----
-
-## 📖 Detailed Documentation
-
-- 📄 **Technical Architecture Markdown:** [`docs/architecture_and_workflow.md`](docs/architecture_and_workflow.md)
-- 🎨 **Interactive Visual Flowchart HTML:** [`docs/architecture_and_workflow.html`](docs/architecture_and_workflow.html)
-- 📊 **Empirical Research Progress:** [`project_progress.md`](project_progress.md)
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+## ⚖️ License
+Released under the MIT License.
