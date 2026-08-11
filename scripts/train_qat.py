@@ -30,10 +30,10 @@ import torch.backends.cudnn as cudnn
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from esp32_llm.tokenizer import BPETokenizer
-from esp32_llm.model import ESP32LLM, ESP32LLMConfig
-from esp32_llm.quantization import replace_linear_with_ternary
-from esp32_llm.train import BPEDataset, get_lr
+from micro_lm.tokenizer import BPETokenizer
+from micro_lm.model import ESP32LLM, ESP32LLMConfig
+from micro_lm.quantization import replace_linear_with_ternary
+from micro_lm.train import BPEDataset, get_lr
 
 
 # --- Logging ---

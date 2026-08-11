@@ -5,8 +5,8 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from esp32_llm.model import ESP32LLM, ESP32LLMConfig
-from esp32_llm.tokenizer import BPETokenizer
+from micro_lm.model import ESP32LLM, ESP32LLMConfig
+from micro_lm.tokenizer import BPETokenizer
 
 def benchmark():
     device = "cpu"

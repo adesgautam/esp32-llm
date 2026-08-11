@@ -4,10 +4,10 @@ import torch
 import copy
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
-from esp32_llm.model import ESP32LLMConfig, ESP32LLM
-from esp32_llm.quantization import apply_ptq
-from esp32_llm.tokenizer import BPETokenizer
-from esp32_llm.train import BPEDataset
+from micro_lm.model import ESP32LLMConfig, ESP32LLM
+from micro_lm.quantization import apply_ptq
+from micro_lm.tokenizer import BPETokenizer
+from micro_lm.train import BPEDataset
 from torch.utils.data import DataLoader
 
 def evaluate_loss(model, val_loader, device="cpu", eval_iters=50):

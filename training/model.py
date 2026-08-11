@@ -1,1 +1,1 @@
-from esp32_llm.model import ESP32LLMConfig as TinyPoetConfig
+from micro_lm.model import ESP32LLMConfig as TinyPoetConfig

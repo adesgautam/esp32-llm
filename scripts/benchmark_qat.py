@@ -7,10 +7,10 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from esp32_llm.tokenizer import BPETokenizer
-from esp32_llm.model import ESP32LLM, ESP32LLMConfig
-from esp32_llm.quantization import replace_linear_with_ternary, apply_ptq
-from esp32_llm.train import BPEDataset
+from micro_lm.tokenizer import BPETokenizer
+from micro_lm.model import ESP32LLM, ESP32LLMConfig
+from micro_lm.quantization import replace_linear_with_ternary, apply_ptq
+from micro_lm.train import BPEDataset
 
 def calculate_perplexity(model, data_loader, device):
     model.eval()

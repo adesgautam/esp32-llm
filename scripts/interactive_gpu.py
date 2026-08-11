@@ -5,16 +5,16 @@ import torch
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import esp32_llm.model as model_mod
+import micro_lm.model as model_mod
 model_mod.TinyPoetConfig = model_mod.ESP32LLMConfig
 model_mod.TinyPoet = model_mod.ESP32LLM
 
-sys.modules['training'] = sys.modules['esp32_llm']
+sys.modules['training'] = sys.modules['micro_lm']
 sys.modules['training.model'] = model_mod
-sys.modules['tinypoet'] = sys.modules['esp32_llm']
+sys.modules['tinypoet'] = sys.modules['micro_lm']
 sys.modules['tinypoet.model'] = model_mod
 
-from esp32_llm.tokenizer import BPETokenizer, BASE_CHARS
+from micro_lm.tokenizer import BPETokenizer, BASE_CHARS
 
 class CharTokenizer:
     def __init__(self):

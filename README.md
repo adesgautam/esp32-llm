@@ -21,15 +21,12 @@ Micro-LM (formerly ESP32-LLM) is an incredibly optimized, ultra-low-memory langu
 
 We provide multiple variations of the architecture in the `models/` directory, spanning from 50K up to 11.4M parameters depending on your hardware limits (Standard ESP32 vs ESP32-S3). Check the [Models README](models/README.md) for full config details.
 
-| Friendly Name | Params | Architecture | Precision | Target Device | Final PPL | Measured TPS | Location |
-|---------------|--------|--------------|-----------|---------------|-----------|--------------|----------|
-| **Micro-LM-Pro** | 3.1M | 4L / 4H / 256D | 1.58-bit | ESP32-S3 | **15.52** | ~1.8 TPS | `models/Micro-LM-Pro/model.pth/bin` |
-| **Micro-LM-Ultra**| 11.4M | 4L / 8H / 512D | 1.58-bit | ESP32-S3 | - | ~0.5 TPS | `models/Micro-LM-Ultra/model.pth` |
-| **Micro-LM-Base** | 181K | 4L / 4H / 64D | FP32 | Standard ESP32 | - | ~14.2 TPS | `models/Micro-LM-Base/model.pth` |
-| **TinyPoet-INT4** | 164K | 4L / 4H / 64D | INT4 | Standard ESP32 | - | ~22.5 TPS | `models/TinyPoet-INT4/model.pth/bin` |
-| **TinyPoet-FP32** | 164K | 4L / 4H / 64D | FP32 | Standard ESP32 | - | ~18.1 TPS | `models/TinyPoet-FP32/model.pth` |
-| **TinyPoet-Nano** | 50K | 4L / 2H / 32D | 1.58-bit | Standard ESP32 | - | ~45.0 TPS | `models/TinyPoet-Nano/model.pth` |
-| **TinyPoet-Pico** | 50K | 4L / 2H / 32D | INT4 | Standard ESP32 | - | ~52.0 TPS | `models/TinyPoet-Pico/model.pth` |
+| Friendly Name | Params | Architecture | Precision | Target Device | PPL | Hardware TPS | Location |
+|---------------|--------|--------------|-----------|---------------|-----|--------------|----------|
+| **Micro-LM-Pro** | 3.1M | 4L / 4H / 256D | 1.58-bit | Standard ESP32 | **15.52** | ~1.5 TPS | `models/Micro-LM-Pro/model.bin` |
+| **Micro-LM-Ultra**| 11.4M | 4L / 8H / 512D | 1.58-bit | ESP32-S3 (8MB+ Flash) | ~18.2 | N/A (>4MB Flash) | `models/Micro-LM-Ultra/model.bin` |
+| **Micro-LM-Base** | 181K | 4L / 4H / 64D | FP32 | Standard ESP32 | ~220.5 | ~8.7 TPS | `models/Micro-LM-Base/model.bin` |
+| **Micro-LM-Pico** | 207K | 4L / 4H / 64D | 1.58-bit | Standard ESP32 (<120KB RAM) | 234.50 | ~15.8 TPS | `models/Micro-LM-Pico/model.bin` |
 
 ## 🚀 Quickstart
 
@@ -45,8 +42,8 @@ cd firmware
 pio run
 cd ..
 
-# 2. Flash C++ firmware + model weights (e.g. TinyPoet-INT4 for Standard ESP32)
-.\.venv\Scripts\python.exe scripts/flash_firmware.py --port COM3 --model models/TinyPoet-INT4/model.bin
+# 2. Flash C++ firmware + model weights (e.g. Micro-LM-Pico for Standard ESP32)
+.\.venv\Scripts\python.exe scripts/flash_firmware.py --port COM3 --model models/Micro-LM-Pico/model.bin
 ```
 
 ### 2. Monitor Hardware Serial Output
