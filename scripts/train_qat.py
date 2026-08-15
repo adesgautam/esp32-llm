@@ -255,6 +255,12 @@ def train_qat():
                         help="Peak learning rate (default: 3e-4)")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume from")
+    parser.add_argument("--teacher", type=str, default=None,
+                        help="Path to teacher checkpoint for Knowledge Distillation (e.g. checkpoints/Micro-LM-Ultra/Micro-LM-Ultra_qat.pth)")
+    parser.add_argument("--kd_alpha", type=float, default=0.5,
+                        help="Weight for KD loss (0.0 = CE only, 1.0 = KD only, default: 0.5)")
+    parser.add_argument("--kd_temp", type=float, default=2.0,
+                        help="Softmax temperature for Knowledge Distillation (default: 2.0)")
     parser.add_argument("--max_chars", type=int, default=None,
                         help="Maximum characters to load from corpus (auto-scaled per model if None)")
     parser.add_argument("--gdrive_dir", type=str, default="/content/drive/MyDrive/esp32_llm_checkpoints",
@@ -383,6 +389,24 @@ def train_qat():
             best_val_loss = ckpt['best_val_loss']
         log.print(f"\n  Resumed from {args.resume} (epoch {start_epoch})")
 
+    # ─── Knowledge Distillation (Teacher) ───
+    teacher_model = None
+    if args.teacher and os.path.exists(args.teacher):
+        log.print(f"\n[KD] Loading Teacher Model from {args.teacher}...")
+        t_ckpt = torch.load(args.teacher, map_location=device, weights_only=False)
+        t_config = t_ckpt.get('config')
+        if t_config is None:
+            t_config = ESP32LLMConfig.micro_lm_ultra()
+        teacher_model = ESP32LLM(t_config)
+        teacher_model = replace_linear_with_ternary(teacher_model)
+        teacher_model.load_state_dict(t_ckpt['model_state_dict'])
+        teacher_model = teacher_model.to(device)
+        teacher_model.eval()
+        for p in teacher_model.parameters():
+            p.requires_grad = False
+        log.print(f"  [KD] Teacher loaded: {teacher_model.count_parameters():,} params ({teacher_model.count_parameters()/1e6:.2f}M)")
+        log.print(f"  [KD] Distillation Alpha={args.kd_alpha} | Temp={args.kd_temp}")
+
     # ─── Initial eval ───
     val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, batch_size, device, use_amp)
     log.print(f"\nPre-training eval: Val Loss={val_loss:.4f} | BPC={val_bpc:.4f} | PPL={val_ppl:.2f}")
@@ -395,7 +419,7 @@ def train_qat():
     train_start = time.time()
 
     log.print(f"\n{'='*65}")
-    log.print(f"  Starting Training")
+    log.print(f"  Starting Training" + (" [with Knowledge Distillation]" if teacher_model else ""))
     log.print(f"{'='*65}\n")
 
     for epoch in range(start_epoch, EPOCHS + 1):
@@ -409,7 +433,21 @@ def train_qat():
             x, y = get_batch(train_data, config.block_size, batch_size, device)
 
             with torch.amp.autocast("cuda", enabled=use_amp):
-                _, loss = model(x, y)
+                s_logits, loss_ce = model(x, y)
+
+                if teacher_model is not None:
+                    with torch.no_grad():
+                        t_logits, _ = teacher_model(x)
+                    T = args.kd_temp
+                    loss_kd = F.kl_div(
+                        F.log_softmax(s_logits / T, dim=-1),
+                        F.softmax(t_logits / T, dim=-1),
+                        reduction="batchmean"
+                    ) * (T * T)
+                    loss = (1.0 - args.kd_alpha) * loss_ce + args.kd_alpha * loss_kd
+                else:
+                    loss = loss_ce
+
                 loss = loss / ACCUM  # scale for accumulation
 
             scaler.scale(loss).backward()
