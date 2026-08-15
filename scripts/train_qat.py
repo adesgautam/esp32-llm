@@ -240,8 +240,8 @@ def train_qat():
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         corpus = f.read()
-    if args.config == "micro_lm_pico":
-        corpus = corpus[:50000] # Super fast training
+    # if args.config == "micro_lm_pico":
+        # corpus = corpus[:50000] # Super fast training
     log.print(f"\nCorpus: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
 
     # ─── Tokenizer ───

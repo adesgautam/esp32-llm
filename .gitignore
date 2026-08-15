@@ -10,6 +10,11 @@ firmware/.pio/
 firmware/build/
 firmware/.vscode/
 firmware/compile_commands.json
+firmware_s3/.pio/
+firmware_s3/.cache/
+firmware_s3/.vscode/
+firmware_s3/compile_commands.json
+
 
 # Datasets and Checkpoints
 datasets/raw/
