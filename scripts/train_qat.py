@@ -19,6 +19,7 @@ import math
 import time
 import json
 import struct
+import shutil
 import argparse
 import datetime
 import torch
@@ -27,6 +28,12 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import torch.backends.cudnn as cudnn
+
+# Enable TF32 for NVIDIA Tensor Cores (Tesla T4 / Ampere / Ada)
+if torch.cuda.is_available():
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    cudnn.benchmark = True
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -43,6 +50,15 @@ CONFIG_TO_NAME = {
     "micro_lm_mega": "Micro-LM-Mega",
     "micro_lm_s3_large": "Micro-LM-S3-Large",
     "micro_lm_colossus": "Micro-LM-Colossus"
+}
+
+DEFAULT_BATCH_SIZES = {
+    "micro_lm_pico": 64,
+    "micro_lm_pro": 32,
+    "micro_lm_ultra": 32,
+    "micro_lm_s3_large": 16,
+    "micro_lm_mega": 16,
+    "micro_lm_colossus": 8
 }
 
 # --- Logging ---
@@ -217,24 +233,28 @@ def generate_sample(model, tokenizer, device, prompt="I ", max_tokens=60):
 
 # ─── Main Training Loop ───────────────────────────────────
 def train_qat():
-    cudnn.benchmark = True
     parser = argparse.ArgumentParser(description="ESP32LLM QAT Training")
     parser.add_argument("--config", choices=["micro_lm_pro", "micro_lm_ultra", "micro_lm_mega", "micro_lm_pico", "micro_lm_s3_large", "micro_lm_colossus"], default="micro_lm_pro",
                         help="Model architecture config (default: micro_lm_pro)")
     parser.add_argument("--epochs", type=int, default=30,
                         help="Number of training epochs (default: 30)")
-    parser.add_argument("--batch_size", type=int, default=8,
-                        help="Physical batch size per step (default: 8)")
+    parser.add_argument("--batch_size", type=int, default=None,
+                        help="Physical batch size per step (auto-tuned for GPU Tensor Cores if None)")
     parser.add_argument("--accum_steps", type=int, default=4,
                         help="Gradient accumulation steps (effective_bs = batch_size * accum) (default: 4)")
     parser.add_argument("--lr", type=float, default=3e-4,
                         help="Peak learning rate (default: 3e-4)")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume from")
+    parser.add_argument("--gdrive_dir", type=str, default="/content/drive/MyDrive/esp32_llm_checkpoints",
+                        help="Destination folder on Google Drive for continuous backup")
     args = parser.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     use_amp = (device == "cuda")
+
+    # Auto-tune batch size for 100% GPU utilization if not provided
+    batch_size = args.batch_size if args.batch_size is not None else DEFAULT_BATCH_SIZES.get(args.config, 32)
 
     log = TrainingLogger("checkpoints", args.config)
     config_name = args.config.upper().replace("_", " ")
@@ -300,7 +320,7 @@ def train_qat():
     log.print(f"Precision: Ternary QAT (1.58-bit weights via STE)")
 
     # ─── Steps Calculation ───
-    steps_per_epoch = max(1, (len(train_data) - config.block_size) // (args.batch_size * config.block_size))
+    steps_per_epoch = max(1, (len(train_data) - config.block_size) // (batch_size * config.block_size))
 
     # ─── Optimizer & Schedule ───
     MAX_LR = args.lr
@@ -309,22 +329,28 @@ def train_qat():
     EPOCHS = args.epochs
     ACCUM = args.accum_steps
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=MAX_LR, weight_decay=WEIGHT_DECAY)
+    use_fused = (device == "cuda" and "fused" in torch.optim.AdamW.__init__.__code__.co_varnames)
+    try:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=MAX_LR, weight_decay=WEIGHT_DECAY, fused=use_fused)
+    except Exception:
+        optimizer = torch.optim.AdamW(model.parameters(), lr=MAX_LR, weight_decay=WEIGHT_DECAY)
+
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     total_steps = EPOCHS * steps_per_epoch // ACCUM
     warmup_steps = int(total_steps * 0.05)
 
-    effective_bs = args.batch_size * ACCUM
+    effective_bs = batch_size * ACCUM
     log.print(f"\nTraining Config:")
     log.print(f"  Epochs: {EPOCHS}")
-    log.print(f"  Batch size: {args.batch_size} × {ACCUM} accum = {effective_bs} effective")
+    log.print(f"  Batch size: {batch_size} × {ACCUM} accum = {effective_bs} effective")
     log.print(f"  Steps/epoch: {steps_per_epoch} ({steps_per_epoch//ACCUM} optimizer steps)")
     log.print(f"  Total optimizer steps: {total_steps}")
     log.print(f"  Warmup: {warmup_steps} steps")
     log.print(f"  LR: {MAX_LR} → {MIN_LR} (cosine)")
     log.print(f"  Weight decay: {WEIGHT_DECAY}")
     log.print(f"  Mixed precision (AMP): {use_amp}")
+    log.print(f"  Fused AdamW: {use_fused}")
 
     # ─── Resume ───
     start_epoch = 1
@@ -341,7 +367,7 @@ def train_qat():
         log.print(f"\n  Resumed from {args.resume} (epoch {start_epoch})")
 
     # ─── Initial eval ───
-    val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, args.batch_size, device, use_amp)
+    val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, batch_size, device, use_amp)
     log.print(f"\nPre-training eval: Val Loss={val_loss:.4f} | BPC={val_bpc:.4f} | PPL={val_ppl:.2f}")
 
     # ─── Training ───
@@ -363,7 +389,7 @@ def train_qat():
         optimizer.zero_grad()
 
         for step in range(steps_per_epoch):
-            x, y = get_batch(train_data, config.block_size, args.batch_size, device)
+            x, y = get_batch(train_data, config.block_size, batch_size, device)
 
             with torch.amp.autocast("cuda", enabled=use_amp):
                 _, loss = model(x, y)
@@ -390,7 +416,7 @@ def train_qat():
         epoch_time = time.time() - epoch_start
 
         # ─── Validation ───
-        val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, args.batch_size, device, use_amp)
+        val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, batch_size, device, use_amp)
 
         improved = ""
         if val_loss < best_val_loss:
@@ -436,6 +462,18 @@ def train_qat():
         }
         with open(os.path.join(log.config_dir, "training_progress.json"), "w") as f:
             json.dump(progress_report, f, indent=2)
+
+        # Resilient GDrive sync on every epoch
+        if args.gdrive_dir and os.path.exists(args.gdrive_dir):
+            try:
+                gdrive_ckpt_dir = os.path.join(args.gdrive_dir, "checkpoints", model_name)
+                os.makedirs(gdrive_ckpt_dir, exist_ok=True)
+                if os.path.exists(ckpt_path):
+                    shutil.copy2(ckpt_path, gdrive_ckpt_dir)
+                shutil.copy2(os.path.join(log.config_dir, "training_progress.json"), gdrive_ckpt_dir)
+                shutil.copy2(log.log_path, gdrive_ckpt_dir)
+            except Exception:
+                pass
 
         # ─── Generation sample every epoch ───
         if True:
@@ -503,6 +541,22 @@ def train_qat():
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
     log.print(f"\nSummary saved: {summary_path}")
+
+    # Final full GDrive sync
+    if args.gdrive_dir and os.path.exists(args.gdrive_dir):
+        try:
+            gdrive_fw_dir = os.path.join(args.gdrive_dir, "firmware_binaries")
+            gdrive_ckpt_dir = os.path.join(args.gdrive_dir, "checkpoints", model_name)
+            os.makedirs(gdrive_fw_dir, exist_ok=True)
+            os.makedirs(gdrive_ckpt_dir, exist_ok=True)
+            shutil.copy2(bin_path, gdrive_fw_dir)
+            shutil.copy2(summary_path, gdrive_ckpt_dir)
+            shutil.copy2(log.log_path, gdrive_ckpt_dir)
+            if os.path.exists(ckpt_path):
+                shutil.copy2(ckpt_path, gdrive_ckpt_dir)
+            log.print(f"  [GDrive Sync]: Checkpoint & {model_name}.bin exported to {args.gdrive_dir}")
+        except Exception as e:
+            log.print(f"  [GDrive Sync Warning: {e}]")
 
     log.print(f"\nNext: test interactively with:")
     log.print(f"  .venv\Scripts\python scripts/interactive_gpu.py")

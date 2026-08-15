@@ -105,7 +105,7 @@ notebook = {
       "outputs": [],
       "source": [
         "# 6. Train Micro-LM-Pico (207K params)\n",
-        "!python scripts/train_qat.py --config micro_lm_pico --epochs 50\n",
+        "!python scripts/train_qat.py --config micro_lm_pico --epochs 50 --gdrive_dir $GDRIVE_OUT_DIR\n",
         "sync_to_gdrive()"
       ]
     },
@@ -116,7 +116,7 @@ notebook = {
       "outputs": [],
       "source": [
         "# 7. Train Micro-LM-Ultra (181K params)\n",
-        "!python scripts/train_qat.py --config micro_lm_ultra --epochs 50\n",
+        "!python scripts/train_qat.py --config micro_lm_ultra --epochs 50 --gdrive_dir $GDRIVE_OUT_DIR\n",
         "sync_to_gdrive()"
       ]
     },
@@ -127,7 +127,7 @@ notebook = {
       "outputs": [],
       "source": [
         "# 8. Train Micro-LM-S3-Large (ESP32-S3 tuned model)\n",
-        "!python scripts/train_qat.py --config micro_lm_s3_large --epochs 30\n",
+        "!python scripts/train_qat.py --config micro_lm_s3_large --epochs 30 --gdrive_dir $GDRIVE_OUT_DIR\n",
         "sync_to_gdrive()"
       ]
     },
