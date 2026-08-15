@@ -13,8 +13,8 @@ import re
 from collections import Counter
 
 
-# Base character set matching the original 44-char vocabulary
-BASE_CHARS = list("abcdefghijklmnopqrstuvwxyz0123456789 \n.,'\"-?")
+# Base character set including a-z, A-Z, 0-9, and standard ASCII punctuation
+BASE_CHARS = list("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 \n.,'\"-?!:;()[]{}*&%#@/\\_+=<>|~`^$")
 
 
 class BPETokenizer:
@@ -53,14 +53,16 @@ class BPETokenizer:
         """Train BPE merges on the given text corpus."""
         print(f"Training BPE tokenizer (target vocab_size={self.target_vocab_size})...")
         
-        # Normalize text to our charset
-        text = text.lower()
+        # text = text.lower() # Removed to support A-Z
         
         # Initial tokenization: each character -> its base token ID
         char_to_base_id = {ch: i for i, ch in enumerate(self.base_chars)}
         
-        # Build flat token array
-        tokens = [char_to_base_id[ch] for ch in text if ch in char_to_base_id]
+        # Fallback ID for unknown characters ('?' if available, else space)
+        unk_id = char_to_base_id.get('?', char_to_base_id.get(' ', 0))
+        
+        # Build flat token array, mapping unknowns to unk_id instead of silently dropping
+        tokens = [char_to_base_id.get(ch, unk_id) for ch in text]
         print(f"  Initial: {len(tokens):,} tokens")
         
         n_merges = self.target_vocab_size - self.n_base
@@ -109,11 +111,12 @@ class BPETokenizer:
     
     def encode(self, text: str) -> list:
         """Encode text to token IDs using learned BPE merges."""
-        text = text.lower()
+        # text = text.lower() # Removed to support A-Z
         
         # Start with character-level tokens
         char_to_base_id = {ch: i for i, ch in enumerate(self.base_chars)}
-        tokens = [char_to_base_id[ch] for ch in text if ch in char_to_base_id]
+        unk_id = char_to_base_id.get('?', char_to_base_id.get(' ', 0))
+        tokens = [char_to_base_id.get(ch, unk_id) for ch in text]
         
         # Apply merges in order
         for merge_idx, pair in enumerate(self.merges):

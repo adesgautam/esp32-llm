@@ -9,8 +9,8 @@ Trains Ternary (1.58-bit) models with proper convergence:
   - Full logging to a training log file
 
 Usage:
-  python scripts/train_qat.py                   # Option C (default, 3.1M)
-  python scripts/train_qat.py --config option_b  # Option B (11.4M)
+  python scripts/train_qat.py                   # Micro-LM-Pro (default)
+  python scripts/train_qat.py --config micro_lm_ultra  # Ultra config
   python scripts/train_qat.py --epochs 50        # Override epoch count
 """
 import os
@@ -36,10 +36,20 @@ from micro_lm.quantization import replace_linear_with_ternary
 from micro_lm.train import BPEDataset, get_lr
 
 
+CONFIG_TO_NAME = {
+    "micro_lm_pico": "Micro-LM-Pico",
+    "micro_lm_pro": "Micro-LM-Pro",
+    "micro_lm_ultra": "Micro-LM-Ultra",
+    "micro_lm_mega": "Micro-LM-Mega",
+    "micro_lm_s3_large": "Micro-LM-S3-Large",
+    "micro_lm_colossus": "Micro-LM-Colossus"
+}
+
 # --- Logging ---
 class TrainingLogger:
-    def __init__(self, log_dir="checkpoints", config_name="option_c"):
-        self.config_dir = os.path.join(log_dir, config_name.lower().replace(" ", "_"))
+    def __init__(self, log_dir="checkpoints", config_name="micro_lm_pro"):
+        self.model_name = CONFIG_TO_NAME.get(config_name, config_name)
+        self.config_dir = os.path.join(log_dir, self.model_name)
         os.makedirs(self.config_dir, exist_ok=True)
         # Force UTF-8 stdout on Windows
         if sys.platform == "win32":
@@ -88,23 +98,17 @@ def export_qat_model(model, config, tokenizer, out_bin_path):
     os.makedirs(os.path.dirname(out_bin_path), exist_ok=True)
     bin_file = open(out_bin_path, "wb")
 
-    header = struct.pack(
-        "<8I",
-        0x54504f45,  # 'TPOE'
-        3,           # version 3 = QAT Ternary
-        config.n_layer,
-        config.n_head,
-        config.n_kv_head,
-        config.n_embd,
-        config.block_size,
-        config.vocab_size
-    )
-    bin_file.write(header)
-    total_bytes = len(header)
+    import zlib
+    crc = 0
+
+    header_offset = bin_file.tell()
+    bin_file.write(b'\x00' * 40) # Dummy 10-int header
+    total_bytes = 40
 
     def write_fp32(tensor):
-        nonlocal total_bytes
+        nonlocal total_bytes, crc
         data = tensor.detach().cpu().numpy().astype(np.float32).tobytes()
+        crc = zlib.crc32(data, crc)
         bin_file.write(data)
         total_bytes += len(data)
 
@@ -117,6 +121,7 @@ def export_qat_model(model, config, tokenizer, out_bin_path):
         weight_q = torch.round(weight_norm).clamp(-1, 1)
         write_fp32(scale)
         packed = pack_ternary_weights(weight_q)
+        crc = zlib.crc32(packed, crc)
         bin_file.write(packed)
         total_bytes += len(packed)
         if bias is not None:
@@ -144,6 +149,23 @@ def export_qat_model(model, config, tokenizer, out_bin_path):
     # 3. Final layernorm
     write_fp32(state_dict["transformer.ln_f.weight"])
     write_fp32(state_dict["transformer.ln_f.bias"])
+
+    # Rewrite header with checksum
+    bin_file.seek(header_offset)
+    header = struct.pack(
+        "<10I",
+        0x54504f45,  # 'TPOE'
+        3,           # version 3 = QAT Ternary
+        config.n_layer,
+        config.n_head,
+        config.n_kv_head,
+        config.n_embd,
+        config.block_size,
+        config.vocab_size,
+        crc & 0xFFFFFFFF,
+        (total_bytes - 40) # payload size
+    )
+    bin_file.write(header)
 
     bin_file.close()
     return total_bytes
@@ -184,8 +206,8 @@ def generate_sample(model, tokenizer, device, prompt="I ", max_tokens=60):
 def train_qat():
     cudnn.benchmark = True
     parser = argparse.ArgumentParser(description="ESP32LLM QAT Training")
-    parser.add_argument("--config", choices=["option_c", "option_b", "option_a_plus", "option_pico"], default="option_c",
-                        help="Model architecture config (default: option_c)")
+    parser.add_argument("--config", choices=["micro_lm_pro", "micro_lm_ultra", "micro_lm_mega", "micro_lm_pico", "micro_lm_s3_large", "micro_lm_colossus"], default="micro_lm_pro",
+                        help="Model architecture config (default: micro_lm_pro)")
     parser.add_argument("--epochs", type=int, default=30,
                         help="Number of training epochs (default: 30)")
     parser.add_argument("--batch_size", type=int, default=8,
@@ -218,7 +240,7 @@ def train_qat():
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         corpus = f.read()
-    if args.config == "option_pico":
+    if args.config == "micro_lm_pico":
         corpus = corpus[:50000] # Super fast training
     log.print(f"\nCorpus: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
 
@@ -241,14 +263,18 @@ def train_qat():
     log.print(f"  Train: {len(train_data):,} | Val: {len(val_data):,}")
 
     # ─── Model ───
-    if args.config == "option_c":
-        config = ESP32LLMConfig.option_c()
-    elif args.config == "option_b":
-        config = ESP32LLMConfig.option_b()
-    elif args.config == "option_pico":
-        config = ESP32LLMConfig.option_pico()
+    if args.config == "micro_lm_pro":
+        config = ESP32LLMConfig.micro_lm_pro()
+    elif args.config == "micro_lm_ultra":
+        config = ESP32LLMConfig.micro_lm_ultra()
+    elif args.config == "micro_lm_pico":
+        config = ESP32LLMConfig.micro_lm_pico()
+    elif args.config == "micro_lm_s3_large":
+        config = ESP32LLMConfig.micro_lm_s3_large()
+    elif args.config == "micro_lm_colossus":
+        config = ESP32LLMConfig.micro_lm_colossus()
     else:
-        config = ESP32LLMConfig.option_a_plus()
+        config = ESP32LLMConfig.micro_lm_mega()
 
     model = ESP32LLM(config)
     model = replace_linear_with_ternary(model)
@@ -313,8 +339,9 @@ def train_qat():
     log.print(f"\nPre-training eval: Val Loss={val_loss:.4f} | BPC={val_bpc:.4f} | PPL={val_ppl:.2f}")
 
     # ─── Training ───
-    ckpt_name = f"esp32_llm_qat_{args.config}.pth"
-    ckpt_path = os.path.join("checkpoints", ckpt_name)
+    model_name = CONFIG_TO_NAME.get(args.config, args.config)
+    ckpt_name = f"{model_name}_qat.pth"
+    ckpt_path = os.path.join(log.config_dir, ckpt_name)
     global_step = 0
     train_start = time.time()
 
@@ -431,7 +458,7 @@ def train_qat():
     best_ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     model.load_state_dict(best_ckpt['model_state_dict'])
 
-    bin_path = f"firmware/src/model_weights_{args.config}.bin"
+    bin_path = f"firmware/src/{model_name}.bin"
     total_bytes = export_qat_model(model, config, tokenizer, bin_path)
     log.print(f"Exported: {bin_path} ({total_bytes:,} bytes / {total_bytes/1024/1024:.2f} MB)")
 
@@ -447,7 +474,7 @@ def train_qat():
 
     # Save summary JSON
     summary = {
-        "model": f"esp32_llm_qat_{args.config}",
+        "model": model_name,
         "config": args.config,
         "n_layer": config.n_layer,
         "n_head": config.n_head,
@@ -472,7 +499,7 @@ def train_qat():
     log.print(f"\nSummary saved: {summary_path}")
 
     log.print(f"\nNext: test interactively with:")
-    log.print(f"  .venv\\Scripts\\python scripts/interactive_gpu.py")
+    log.print(f"  .venv\Scripts\python scripts/interactive_gpu.py")
     log.close()
 
 

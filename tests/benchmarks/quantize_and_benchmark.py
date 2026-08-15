@@ -139,8 +139,8 @@ def benchmark_architectures():
     print(" Architecture Target Benchmarking")
     print("="*60)
     
-    calculate_footprint(ESP32LLMConfig.option_a(), "Option A (Max Context)")
-    calculate_footprint(ESP32LLMConfig.option_b(), "Option B (Balanced)")
+    calculate_footprint(ESP32LLMConfig.micro_lm_max_ctx(), "Option A (Max Context)")
+    calculate_footprint(ESP32LLMConfig.micro_lm_ultra(), "Option B (Balanced)")
 
 if __name__ == "__main__":
     benchmark_ptq()

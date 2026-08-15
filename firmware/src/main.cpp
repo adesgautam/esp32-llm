@@ -10,6 +10,7 @@
 #include "esp_spi_flash.h"
 #include "esp_timer.h"
 #include "esp_task_wdt.h"
+#include "esp_rom_crc.h"
 extern "C" {
 #include "esp32_llm_engine.h"
 #include "bpe_vocab.h"
@@ -59,8 +60,22 @@ esp_err_t init_model_runner(void)
         config.n_embd = hdr[5];
         config.block_size = (hdr[6] == 0 || hdr[6] > MAX_BLOCK_SIZE) ? MAX_BLOCK_SIZE : hdr[6];
         config.vocab_size = hdr[7];
-        header_bytes = 32;
-        printf("Detected Format: Ternary 1.58-bit (Version %d)\n", (int)version);
+        uint32_t expected_crc = hdr[8];
+        uint32_t payload_size = hdr[9];
+        header_bytes = 40;
+        printf("Detected Format: Ternary 1.58-bit (Version %d), Checksum: 0x%08x\n", (int)version, (unsigned)expected_crc);
+        
+        printf("Verifying model checksum...\n");
+        if (part->size < header_bytes + payload_size) {
+            printf("WARNING: Partition size %d is smaller than required %d bytes!\n", (int)part->size, (int)(header_bytes + payload_size));
+        } else {
+            uint32_t calc_crc = esp_rom_crc32_le(0, (const uint8_t*)s_mapped_model_ptr + header_bytes, payload_size);
+            if (calc_crc != expected_crc) {
+                printf("WARNING: Checksum MISMATCH! Expected 0x%08x, got 0x%08x\n", (unsigned)expected_crc, (unsigned)calc_crc);
+            } else {
+                printf("Checksum OK.\n");
+            }
+        }
     } else if (magic == 0x54504934) { // 'TPI4' (INT4 Version 1)
         config.format = WEIGHT_FMT_INT4;
         config.n_layer = hdr[2];
@@ -102,18 +117,22 @@ static int bpe_encode_prompt(const char *text, int *out_tokens, int max_tokens) 
     int n = 0;
     for (int i = 0; text[i] && n < max_tokens; i++) {
         char c = text[i];
-        if (c >= 'A' && c <= 'Z') c += 32; // Lowercase
-        
         // Find in base vocabulary (first BPE_N_BASE tokens are single chars)
         int found = -1;
+        int fallback_id = 0; // default to 0 (space usually)
         for (int j = 0; j < BPE_N_BASE; j++) {
             if (bpe_vocab[j][0] == c && bpe_vocab[j][1] == '\0') {
                 found = j;
-                break;
+            }
+            if (bpe_vocab[j][0] == '?' && bpe_vocab[j][1] == '\0') {
+                fallback_id = j;
             }
         }
+        
         if (found >= 0) {
             out_tokens[n++] = found;
+        } else {
+            out_tokens[n++] = fallback_id;
         }
     }
     
@@ -210,6 +229,10 @@ const char* get_model_name(const ESP32LLMConfigC* config) {
     return "Unknown ESP32-LLM Variant";
 }
 
+static float g_temperature = 0.8f;
+static int g_top_k = 8;
+static int g_max_tokens = 100;
+
 void run_poetry_generation(const char *prompt, int max_tokens)
 {
     if (!s_mapped_model_ptr) {
@@ -240,7 +263,7 @@ void run_poetry_generation(const char *prompt, int max_tokens)
         if (step < prompt_len) {
             token_id = prompt_tokens[step];
         } else {
-            token_id = sample_top_k(logits, vocab_size, 0.8f, 8);
+            token_id = sample_top_k(logits, vocab_size, g_temperature, g_top_k);
             gen_count++;
             // BPE decode: print the token string
             if (token_id >= 0 && token_id < (int)vocab_size && token_id < BPE_VOCAB_SIZE) {
@@ -284,15 +307,27 @@ static int input_len = 0;
 void loop() {
     if (s_mapped_model_ptr && Serial.available()) {
         int c = Serial.read();
-        if (c == '\n' || c == '\r') {
-            if (input_len > 0) {
-                input_buf[input_len] = '\0';
-                printf("\n");
-                run_poetry_generation(input_buf, 64);
-                input_len = 0;
-                printf("\n> ");
-            }
-        } else if (input_len < sizeof(input_buf) - 1) {
+            if (c == '\n' || c == '\r') {
+                if (input_len > 0) {
+                    input_buf[input_len] = '\0';
+                    printf("\n");
+                    
+                    if (strncmp(input_buf, "/temp ", 6) == 0) {
+                        g_temperature = atof(input_buf + 6);
+                        printf("Temperature set to %.2f\n", g_temperature);
+                    } else if (strncmp(input_buf, "/topk ", 6) == 0) {
+                        g_top_k = atoi(input_buf + 6);
+                        printf("Top-K set to %d\n", g_top_k);
+                    } else if (strncmp(input_buf, "/len ", 5) == 0) {
+                        g_max_tokens = atoi(input_buf + 5);
+                        printf("Max length set to %d\n", g_max_tokens);
+                    } else {
+                        run_poetry_generation(input_buf, g_max_tokens);
+                    }
+                    
+                    input_len = 0;
+                    printf("\n> ");
+                }      } else if (input_len < sizeof(input_buf) - 1) {
             input_buf[input_len++] = (char)c;
             Serial.write(c); // Echo character back to terminal
         }

@@ -21,7 +21,7 @@ def pack_int4_weights(weight_q):
             packed[i // 2] |= (w.flatten()[i] & 0x0F) << 4
     return packed.tobytes()
 
-def export_model(ckpt_path, bin_path, config_name="option_c", fmt="ternary"):
+def export_model(ckpt_path, bin_path, config_name="micro_lm_pro", fmt="ternary"):
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     
     if "config" in ckpt and isinstance(ckpt["config"], ESP32LLMConfig):
@@ -30,7 +30,7 @@ def export_model(ckpt_path, bin_path, config_name="option_c", fmt="ternary"):
         if hasattr(ESP32LLMConfig, config_name):
             config = getattr(ESP32LLMConfig, config_name)()
         else:
-            config = ESP32LLMConfig.option_c()
+            config = ESP32LLMConfig.micro_lm_pro()
 
     # Ensure config object has all required new fields if loading older checkpoint
     if not hasattr(config, 'n_kv_head'):
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Export a PyTorch .pth checkpoint to a C-compatible .bin file")
     parser.add_argument("--ckpt", type=str, required=True, help="Input .pth checkpoint path")
     parser.add_argument("--out", type=str, required=True, help="Output .bin file path")
-    parser.add_argument("--config", type=str, default="option_c", help="Config name (e.g. option_b, option_c)")
+    parser.add_argument("--config", type=str, default="micro_lm_pro", help="Config name (e.g. micro_lm_ultra, micro_lm_pro)")
     parser.add_argument("--fmt", type=str, default="ternary", choices=["fp32", "int4", "ternary"], help="Export format")
     args = parser.parse_args()
     

@@ -28,8 +28,8 @@ class CharTokenizer:
     def decode(self, ids):
         return "".join([self.id_to_char.get(i, "") for i in ids])
 
-from esp32_llm.model import ESP32LLM
-from esp32_llm.quantization import replace_linear_with_ternary
+from micro_lm.model import ESP32LLM
+from micro_lm.quantization import replace_linear_with_ternary
 
 VARIANTS = {
     "0": {

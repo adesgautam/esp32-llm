@@ -43,7 +43,7 @@ def main():
     train_data = tokens[:-n_val]
     val_data = tokens[-n_val:]
 
-    config = ESP32LLMConfig.option_c()
+    config = ESP32LLMConfig.micro_lm_pro()
     train_ds = BPEDataset(train_data, config.block_size)
     val_ds = BPEDataset(val_data, config.block_size)
     

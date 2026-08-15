@@ -17,16 +17,16 @@ def eval_pth(ckpt_path, is_ternary=False, tokenizer_type="bpe"):
         config = ckpt["config"]
     else:
         if "Pico" in ckpt_path:
-            config = ESP32LLMConfig.option_pico()
+            config = ESP32LLMConfig.micro_lm_pico()
         elif "Pro" in ckpt_path:
-            config = ESP32LLMConfig.option_c()
+            config = ESP32LLMConfig.micro_lm_pro()
         elif "Ultra" in ckpt_path:
-            config = ESP32LLMConfig.option_b()
+            config = ESP32LLMConfig.micro_lm_ultra()
         elif "Base" in ckpt_path:
             # Reconstruct the original Option C dimensions for V2 Base
             config = ESP32LLMConfig(vocab_size=256, block_size=128, n_layer=4, n_head=4, n_kv_head=4, n_embd=64)
         else:
-            config = ESP32LLMConfig.option_pico()
+            config = ESP32LLMConfig.micro_lm_pico()
             
     if not hasattr(config, 'n_kv_head'):
         config.n_kv_head = config.n_head
@@ -38,7 +38,7 @@ def eval_pth(ckpt_path, is_ternary=False, tokenizer_type="bpe"):
     model.load_state_dict(ckpt['model_state_dict'], strict=False)
     model.eval()
 
-    from esp32_llm.tokenizer import BPETokenizer
+    from micro_lm.tokenizer import BPETokenizer
     tokenizer = BPETokenizer(vocab_size=256)
     tokenizer.load("datasets/bpe_tokenizer.json")
 

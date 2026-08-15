@@ -25,27 +25,37 @@ class ESP32LLMConfig:
         self.bias = bias
 
     @classmethod
-    def option_a(cls):
+    def micro_lm_max_ctx(cls):
         """Max Context Architecture (~13.7M params, 2048 ctx, MQA)"""
         return cls(vocab_size=256, block_size=2048, n_layer=2, n_head=12, n_kv_head=1, n_embd=768)
 
     @classmethod
-    def option_b(cls):
+    def micro_lm_ultra(cls):
         """Balanced Architecture (~11.4M params, 1024 ctx, MQA)"""
         return cls(vocab_size=256, block_size=1024, n_layer=4, n_head=8, n_kv_head=1, n_embd=512)
 
     @classmethod
-    def option_c(cls):
+    def micro_lm_pro(cls):
         """OTA Safe Architecture (~3.1M params, 1024 ctx, MQA, RoPE)"""
         return cls(vocab_size=256, block_size=1024, n_layer=4, n_head=4, n_kv_head=1, n_embd=256)
 
     @classmethod
-    def option_a_plus(cls):
+    def micro_lm_mega(cls):
         """Massive Architecture to hit PPL 5-6 (~42M params, 1024 ctx, MQA)"""
         return cls(vocab_size=256, block_size=1024, n_layer=6, n_head=12, n_kv_head=1, n_embd=768)
 
     @classmethod
-    def option_pico(cls):
+    def micro_lm_s3_large(cls):
+        """Massive Architecture for ESP32-S3 8MB PSRAM (~26.2M params, 1024 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=1024, n_layer=10, n_head=8, n_kv_head=1, n_embd=512)
+
+    @classmethod
+    def micro_lm_colossus(cls):
+        """Absolute Max Architecture for ESP32-S3 8MB PSRAM & 16MB Flash (~48.3M params, 1024 ctx, MQA)"""
+        return cls(vocab_size=256, block_size=1024, n_layer=8, n_head=8, n_kv_head=1, n_embd=768)
+
+    @classmethod
+    def micro_lm_pico(cls):
         """Standard ESP32 Architecture (~150K params, 128 ctx, MQA)"""
         return cls(vocab_size=256, block_size=128, n_layer=4, n_head=4, n_kv_head=1, n_embd=64)
 

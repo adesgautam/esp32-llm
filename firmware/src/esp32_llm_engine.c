@@ -169,6 +169,11 @@ void esp32_llm_forward_step(ESP32LLMEngine *engine, int token_id, int pos, float
     uint32_t vocab_size = engine->config.vocab_size;
     WeightFormat fmt = engine->config.format;
     
+    if (fmt != WEIGHT_FMT_TERNARY_2BIT && fmt != WEIGHT_FMT_INT4 && fmt != WEIGHT_FMT_FP32 && fmt != WEIGHT_FMT_TERNARY_1_58BIT) {
+        printf("ERROR: Unsupported weight format %d in forward_step!\n", (int)fmt);
+        return;
+    }
+    
     const uint8_t* ptr = engine->model_weights_ptr;
     
     // Embeddings (Stored in FP32)

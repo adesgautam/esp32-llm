@@ -146,7 +146,7 @@ def evaluate_bin(bin_path, tokenizer_type="bpe"):
             tokenizer = BPETokenizer(vocab_size=256)
             tokenizer.load("datasets/bpe_tokenizer.json")
         else:
-            from esp32_llm.tokenizer import CharTokenizer
+            from micro_lm.tokenizer import CharTokenizer
             tokenizer = CharTokenizer()
             tokenizer.load("datasets/char_tokenizer.json")
         

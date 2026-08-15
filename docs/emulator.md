@@ -26,7 +26,7 @@ This generates the bootloader, partition table, and the main firmware binary ins
 
 Next, ensure you have exported your `.pth` model to a `.bin` format using the export script:
 ```bash
-python scripts/export_checkpoint.py --ckpt checkpoints/esp32_llm_qat_option_c.pth --config option_c --format ternary
+python scripts/export_checkpoint.py --ckpt checkpoints/esp32_llm_qat_micro_lm_pro.pth --config micro_lm_pro --format ternary
 ```
 
 ## 3. Merge and Pad the Flash Image
