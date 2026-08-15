@@ -171,18 +171,31 @@ def export_qat_model(model, config, tokenizer, out_bin_path):
     return total_bytes
 
 
-# ─── Validation ────────────────────────────────────────────
+# ─── GPU-Accelerated Batching & Validation ──────────────────
+def get_batch(data_tensor, block_size, batch_size, device):
+    ix = torch.randint(len(data_tensor) - block_size, (batch_size,), device=device)
+    x = torch.stack([data_tensor[i : i + block_size] for i in ix])
+    y = torch.stack([data_tensor[i + 1 : i + 1 + block_size] for i in ix])
+    return x, y
+
+
 @torch.no_grad()
-def evaluate(model, val_loader, device, use_amp=False):
+def evaluate(model, val_data, block_size, batch_size, device, use_amp=False):
     model.eval()
     total_loss = 0.0
-    total_batches = 0
-    for x, y in val_loader:
-        x, y = x.to(device), y.to(device)
+    num_samples = (len(val_data) - 1) // block_size
+    total_batches = max(1, min(50, num_samples // batch_size))
+    for step in range(total_batches):
+        start = step * batch_size * block_size
+        indices = torch.arange(start, start + batch_size * block_size, block_size, device=device)
+        indices = indices[indices + block_size < len(val_data)]
+        if len(indices) == 0:
+            break
+        x = torch.stack([val_data[i : i + block_size] for i in indices])
+        y = torch.stack([val_data[i + 1 : i + 1 + block_size] for i in indices])
         with torch.amp.autocast("cuda", enabled=use_amp):
             _, loss = model(x, y)
         total_loss += loss.item()
-        total_batches += 1
     avg_loss = total_loss / max(1, total_batches)
     bpc = avg_loss / math.log(2)
     ppl = math.exp(min(avg_loss, 20))
@@ -240,8 +253,6 @@ def train_qat():
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         corpus = f.read()
-    # if args.config == "micro_lm_pico":
-        # corpus = corpus[:50000] # Super fast training
     log.print(f"\nCorpus: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
 
     # ─── Tokenizer ───
@@ -253,8 +264,10 @@ def train_qat():
     log.print("Tokenizing corpus...")
     t0 = time.time()
     tokens = tokenizer.encode(corpus)
-    data = torch.tensor(tokens, dtype=torch.long)
+    # Move token dataset directly to GPU memory for zero-copy training
+    data = torch.tensor(tokens, dtype=torch.long, device=device)
     log.print(f"  BPE tokens: {len(data):,} (compression: {len(corpus)/len(data):.2f}x) [{time.time()-t0:.1f}s]")
+    log.print(f"  Dataset VRAM: {data.element_size() * data.nelement() / 1024 / 1024:.2f} MB on {device.upper()}")
 
     # Train/Val split (5% val)
     n_val = int(len(data) * 0.05)
@@ -286,15 +299,8 @@ def train_qat():
     log.print(f"Context: {config.block_size} tokens")
     log.print(f"Precision: Ternary QAT (1.58-bit weights via STE)")
 
-    # ─── Dataloaders ───
-    train_ds = BPEDataset(train_data, config.block_size)
-    val_ds = BPEDataset(val_data, config.block_size)
-
-    use_pin = (device == "cuda")
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                              pin_memory=use_pin, num_workers=0)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
-                            pin_memory=use_pin, num_workers=0)
+    # ─── Steps Calculation ───
+    steps_per_epoch = max(1, (len(train_data) - config.block_size) // (args.batch_size * config.block_size))
 
     # ─── Optimizer & Schedule ───
     MAX_LR = args.lr
@@ -306,14 +312,14 @@ def train_qat():
     optimizer = torch.optim.AdamW(model.parameters(), lr=MAX_LR, weight_decay=WEIGHT_DECAY)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
-    total_steps = EPOCHS * len(train_loader) // ACCUM
+    total_steps = EPOCHS * steps_per_epoch // ACCUM
     warmup_steps = int(total_steps * 0.05)
 
     effective_bs = args.batch_size * ACCUM
     log.print(f"\nTraining Config:")
     log.print(f"  Epochs: {EPOCHS}")
     log.print(f"  Batch size: {args.batch_size} × {ACCUM} accum = {effective_bs} effective")
-    log.print(f"  Steps/epoch: {len(train_loader)} ({len(train_loader)//ACCUM} optimizer steps)")
+    log.print(f"  Steps/epoch: {steps_per_epoch} ({steps_per_epoch//ACCUM} optimizer steps)")
     log.print(f"  Total optimizer steps: {total_steps}")
     log.print(f"  Warmup: {warmup_steps} steps")
     log.print(f"  LR: {MAX_LR} → {MIN_LR} (cosine)")
@@ -335,7 +341,7 @@ def train_qat():
         log.print(f"\n  Resumed from {args.resume} (epoch {start_epoch})")
 
     # ─── Initial eval ───
-    val_loss, val_bpc, val_ppl = evaluate(model, val_loader, device, use_amp)
+    val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, args.batch_size, device, use_amp)
     log.print(f"\nPre-training eval: Val Loss={val_loss:.4f} | BPC={val_bpc:.4f} | PPL={val_ppl:.2f}")
 
     # ─── Training ───
@@ -356,8 +362,8 @@ def train_qat():
         epoch_start = time.time()
         optimizer.zero_grad()
 
-        for step, (x, y) in enumerate(train_loader):
-            x, y = x.to(device), y.to(device)
+        for step in range(steps_per_epoch):
+            x, y = get_batch(train_data, config.block_size, args.batch_size, device)
 
             with torch.amp.autocast("cuda", enabled=use_amp):
                 _, loss = model(x, y)
@@ -384,7 +390,7 @@ def train_qat():
         epoch_time = time.time() - epoch_start
 
         # ─── Validation ───
-        val_loss, val_bpc, val_ppl = evaluate(model, val_loader, device, use_amp)
+        val_loss, val_bpc, val_ppl = evaluate(model, val_data, config.block_size, args.batch_size, device, use_amp)
 
         improved = ""
         if val_loss < best_val_loss:
