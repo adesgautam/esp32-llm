@@ -61,6 +61,15 @@ DEFAULT_BATCH_SIZES = {
     "micro_lm_colossus": 8
 }
 
+DEFAULT_MAX_CHARS = {
+    "micro_lm_pico": 4_000_000,      # 4 MB (~1M tokens) - optimal for 207K params
+    "micro_lm_pro": 12_000_000,      # 12 MB (~3M tokens) - optimal for 3M params
+    "micro_lm_ultra": 25_000_000,    # 25 MB (~6M tokens) - optimal for 11M params
+    "micro_lm_s3_large": 45_000_000, # 45 MB (~11M tokens) - optimal for 26M params
+    "micro_lm_mega": 60_000_000,     # 60 MB
+    "micro_lm_colossus": 80_000_000  # 80 MB
+}
+
 # --- Logging ---
 class TrainingLogger:
     def __init__(self, log_dir="checkpoints", config_name="micro_lm_pro"):
@@ -246,6 +255,8 @@ def train_qat():
                         help="Peak learning rate (default: 3e-4)")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume from")
+    parser.add_argument("--max_chars", type=int, default=None,
+                        help="Maximum characters to load from corpus (auto-scaled per model if None)")
     parser.add_argument("--gdrive_dir", type=str, default="/content/drive/MyDrive/esp32_llm_checkpoints",
                         help="Destination folder on Google Drive for continuous backup")
     args = parser.parse_args()
@@ -273,7 +284,13 @@ def train_qat():
 
     with open(corpus_path, "r", encoding="utf-8") as f:
         corpus = f.read()
-    log.print(f"\nCorpus: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
+    
+    max_chars = args.max_chars if args.max_chars is not None else DEFAULT_MAX_CHARS.get(args.config, 25_000_000)
+    if max_chars > 0 and len(corpus) > max_chars:
+        corpus = corpus[:max_chars]
+        log.print(f"Corpus scaled for {config_name}: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
+    else:
+        log.print(f"\nCorpus: {len(corpus):,} chars ({len(corpus)/1024/1024:.2f} MB)")
 
     # ─── Tokenizer ───
     VOCAB_SIZE = 256
@@ -558,8 +575,8 @@ def train_qat():
         except Exception as e:
             log.print(f"  [GDrive Sync Warning: {e}]")
 
-    log.print(f"\nNext: test interactively with:")
-    log.print(f"  .venv\Scripts\python scripts/interactive_gpu.py")
+    log.print("\nNext: test interactively with:")
+    log.print(r"  .venv\Scripts\python scripts/interactive_gpu.py")
     log.close()
 
 

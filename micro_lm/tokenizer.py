@@ -109,30 +109,40 @@ class BPETokenizer:
         print(f"  Final vocab size: {self.vocab_size}")
         print(f"  Total merges learned: {len(self.merges)}")
     
-    def encode(self, text: str) -> list:
-        """Encode text to token IDs using learned BPE merges."""
-        # text = text.lower() # Removed to support A-Z
-        
-        # Start with character-level tokens
-        char_to_base_id = {ch: i for i, ch in enumerate(self.base_chars)}
-        unk_id = char_to_base_id.get('?', char_to_base_id.get(' ', 0))
-        tokens = [char_to_base_id.get(ch, unk_id) for ch in text]
-        
-        # Apply merges in order
+    def _encode_chunk(self, text_chunk: str, char_to_base_id: dict, unk_id: int) -> list:
+        """Encode a small chunk of text."""
+        tokens = [char_to_base_id.get(ch, unk_id) for ch in text_chunk]
         for merge_idx, pair in enumerate(self.merges):
             new_token_id = self.n_base + merge_idx
             new_tokens = []
             i = 0
-            while i < len(tokens):
-                if i < len(tokens) - 1 and tokens[i] == pair[0] and tokens[i+1] == pair[1]:
+            n = len(tokens)
+            while i < n:
+                if i < n - 1 and tokens[i] == pair[0] and tokens[i+1] == pair[1]:
                     new_tokens.append(new_token_id)
                     i += 2
                 else:
                     new_tokens.append(tokens[i])
                     i += 1
             tokens = new_tokens
-        
         return tokens
+
+    def encode(self, text: str) -> list:
+        """Encode text to token IDs using learned BPE merges (chunked for low RAM)."""
+        char_to_base_id = {ch: i for i, ch in enumerate(self.base_chars)}
+        unk_id = char_to_base_id.get('?', char_to_base_id.get(' ', 0))
+        
+        # For small texts, encode directly
+        if len(text) <= 50000:
+            return self._encode_chunk(text, char_to_base_id, unk_id)
+        
+        # For large texts, chunk in 50k character blocks to keep memory under 10MB
+        chunk_size = 50000
+        all_tokens = []
+        for start in range(0, len(text), chunk_size):
+            chunk = text[start : start + chunk_size]
+            all_tokens.extend(self._encode_chunk(chunk, char_to_base_id, unk_id))
+        return all_tokens
     
     def decode(self, token_ids: list) -> str:
         """Decode token IDs back to text string."""
