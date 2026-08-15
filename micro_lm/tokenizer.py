@@ -129,6 +129,11 @@ class BPETokenizer:
 
     def encode(self, text: str) -> list:
         """Encode text to token IDs using learned BPE merges (chunked for low RAM)."""
+        # Auto-lowercase if base vocabulary does not have uppercase chars
+        has_uppercase = any('A' <= ch <= 'Z' for ch in self.base_chars)
+        if not has_uppercase:
+            text = text.lower()
+
         char_to_base_id = {ch: i for i, ch in enumerate(self.base_chars)}
         unk_id = char_to_base_id.get('?', char_to_base_id.get(' ', 0))
         
@@ -168,6 +173,7 @@ class BPETokenizer:
         self.target_vocab_size = data["vocab_size"]
         self.n_base = data["n_base"]
         self.vocab = data["vocab"]
+        self.base_chars = self.vocab[:self.n_base]
         self.merges = [tuple(m) for m in data["merges"]]
         self._build_lookup()
         print(f"Loaded BPE tokenizer: vocab_size={self.vocab_size}, merges={len(self.merges)}")
